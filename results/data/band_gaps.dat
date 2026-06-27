@@ -1,0 +1,20 @@
+#Experimental electronic gaps from Blancon nature comm 2018 (Scaling laws, SI Fig 9, 4K). According to Jacky, small uncertainty, quite reliable (basically electronic gap is very close to the 4s exciton energy).
+1 3.016
+2 2.432
+3 2.206
+4 2.078
+5 1.971
+
+#Experimental optical gaps from Blancon nature comm 2018 (Scaling laws, SI Fig 9, 4K) or Stoumpos Chem. Mater. 2016 (Fig 5, 293K). According to Jacky, small uncertainty, quite reliable.
+1 2.54
+2 2.18
+3 2.03
+4 1.92
+5 1.85
+
+#TB band gaps (indirect due to Rashba splitting) from experimental structure at 293K. 
+1 3.355
+2 2.96
+3 2.75
+4 2.845
+5 2.644

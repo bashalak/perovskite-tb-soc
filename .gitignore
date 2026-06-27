@@ -1,0 +1,65 @@
+__pycache__/
+*.pyc
+*.pyo
+*.so
+*.o
+*.bak
+*.Zone.Identifier
+*.npz
+.DS_Store
+
+# Reference PDFs (large, copyrighted — keep local only)
+refs/
+
+# Phase 2 generated files (large, reproducible from scripts)
+data/surrogate_model.joblib
+data/optuna_study.db
+data/surrogate_dataset.csv
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Kept LOCAL ONLY (not published) — these files remain on disk, just untracked.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Unpublished manuscript, planning docs, old report
+report/
+
+# Raw DFT working data
+dft/
+
+# Diagnostic / scratch scripts
+src/python/_*.py
+
+# Abandoned / exploratory directions (kept for a future separate project)
+src/python/vqe_tb.py
+src/python/vqe_dispersion.py
+src/python/train_surrogate.py
+src/python/generate_surrogate_data.py
+src/python/tb_optimize.py
+src/python/optuna_optimize.py
+
+# Superseded versions (replaced by the Harrison framework)
+src/python/ham_ortho.py
+src/python/fit_ortho.py
+src/python/fit_ortho_priority.py
+src/python/fit_ortho_sanity.py
+src/python/fit_ortho_sanity_harrison.py
+src/python/bse_2d.py
+src/python/plot_bands_interactive.py
+
+# Internal portfolio/build notes
+docs/portfolio_build_report.md
+
+# Cubic/exploratory & intermediate structures (kept local)
+data/pos3D2Dcubic_pnma/
+data/pos3D2Dcubic_pnma_full/
+data/pos3D2Dcubic_sqrt2/
+data/pos3D2Dcubic_sqrt2_tiltZ/
+data/original2DPOSCAR/
+data/pos3D2Dtilted/check_standardized/
+data/pos3D2Dtilted/*_original.vasp
+data/pos3D2Dtilted/*_doubled.vasp
+
+# third-party reference data kept local
+data/jiang_gw_pnma_targets.csv
+results/figures/vqe_*
+results/figures/surrogate_*

@@ -1,0 +1,2889 @@
+! ham3d2d.f90
+subroutine hamiltonian_cubic3d(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                               Vss, Vsp, Vps, Vppsig, Vpppi, &
+                               deltaSO0, deltaSO1, ham, n) bind(C, name="hamiltonian_cubic3d")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(out) :: ham
+    
+    real(c_double) :: a, lamd1, lamd2
+    complex(c_double_complex) :: ii
+    complex(c_double_complex), dimension(4,4) :: Pb, I1, Tx, Ty, Tz
+    complex(c_double_complex), dimension(16,16) :: Hk
+    complex(c_double_complex), dimension(8,8) :: HintSOC
+    integer :: i, j
+    
+    a = 6.28_c_double
+    ii = (0.0_c_double, 1.0_c_double)
+    lamd1 = 2.0_c_double * deltaSO0 / 3.0_c_double
+    lamd2 = 2.0_c_double * deltaSO1 / 3.0_c_double
+    
+    ! Initialize HintSOC
+    HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC(3,5) = -ii
+    HintSOC(3,8) = (1.0_c_double, 0.0_c_double)
+    HintSOC(4,6) = ii
+    HintSOC(4,7) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(5,3) = ii
+    HintSOC(5,8) = -ii
+    HintSOC(6,4) = -ii
+    HintSOC(6,7) = -ii
+    HintSOC(7,4) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(7,6) = ii
+    HintSOC(8,3) = (1.0_c_double, 0.0_c_double)
+    HintSOC(8,5) = ii
+    
+    ! Pb matrix
+    Pb = (0.0_c_double, 0.0_c_double)
+    Pb(1,1) = cmplx(Es0, 0.0_c_double, c_double_complex)
+    Pb(2,2) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(3,3) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(4,4) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    
+    ! I1 matrix
+    I1 = (0.0_c_double, 0.0_c_double)
+    I1(1,1) = cmplx(Es1, 0.0_c_double, c_double_complex)
+    I1(2,2) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(3,3) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(4,4) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    
+    ! Tx matrix
+    Tx = (0.0_c_double, 0.0_c_double)
+    Tx(1,1) = cmplx(2.0_c_double * Vss * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(1,2) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,2) = cmplx(2.0_c_double * Vppsig * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(3,3) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(4,4) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    
+    ! Ty matrix
+    Ty = (0.0_c_double, 0.0_c_double)
+    Ty(1,1) = cmplx(2.0_c_double * Vss * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(1,3) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(2,2) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(3,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(3,3) = cmplx(2.0_c_double * Vppsig * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(4,4) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    
+    ! Tz matrix
+    Tz = (0.0_c_double, 0.0_c_double)
+    Tz(1,1) = cmplx(2.0_c_double * Vss * cos(kz * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tz(1,4) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kz * a / 2.0_c_double), c_double_complex)
+    Tz(2,2) = cmplx(2.0_c_double * Vpppi * cos(kz * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tz(3,3) = cmplx(2.0_c_double * Vpppi * cos(kz * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tz(4,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kz * a / 2.0_c_double), c_double_complex)
+    Tz(4,4) = cmplx(2.0_c_double * Vppsig * cos(kz * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    
+    ! Build Hk (16x16)
+    Hk = (0.0_c_double, 0.0_c_double)
+    Hk(1:4, 1:4) = Pb
+    Hk(1:4, 5:8) = Tx
+    Hk(1:4, 9:12) = Ty
+    Hk(1:4, 13:16) = Tz
+    Hk(5:8, 1:4) = conjg(transpose(Tx))
+    Hk(5:8, 5:8) = I1
+    Hk(9:12, 1:4) = conjg(transpose(Ty))
+    Hk(9:12, 9:12) = I1
+    Hk(13:16, 1:4) = conjg(transpose(Tz))
+    Hk(13:16, 13:16) = I1
+    
+    ! Final Hamiltonian (32x32)
+    ham = (0.0_c_double, 0.0_c_double)
+    
+    ! Kronecker product with 2x2 identity
+    do i = 1, 16
+        do j = 1, 16
+            ham(2*i-1, 2*j-1) = Hk(i, j)
+            ham(2*i, 2*j) = Hk(i, j)
+        end do
+    end do
+    
+    ! Add SOC terms
+    do i = 1, 8
+        do j = 1, 8
+            ham(i, j) = ham(i, j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ham(8+i, 8+j) = ham(8+i, 8+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(16+i, 16+j) = ham(16+i, 16+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(24+i, 24+j) = ham(24+i, 24+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+        end do
+    end do
+    
+end subroutine hamiltonian_cubic3d
+
+subroutine hamiltonian_cubic3d_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                               Vss, Vsp, Vps, Vppsig, Vpppi, &
+                               deltaSO0, deltaSO1, &
+                               Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &   ! new I-I parameters
+                               ham, n) bind(C, name="hamiltonian_cubic3d_2nd")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II   ! new
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(out) :: ham
+
+    real(c_double) :: a, lamd1, lamd2
+    complex(c_double_complex) :: ii
+    complex(c_double_complex), dimension(4,4) :: Pb, I1, Tx, Ty, Tz
+    complex(c_double_complex), dimension(4,4) :: I1_I2, I1_I3, I2_I3   ! new
+    complex(c_double_complex), dimension(16,16) :: Hk
+    complex(c_double_complex), dimension(8,8) :: HintSOC
+    integer :: i, j
+    
+    a = 6.28_c_double
+    ii = (0.0_c_double, 1.0_c_double)
+    lamd1 = 2.0_c_double * deltaSO0 / 3.0_c_double
+    lamd2 = 2.0_c_double * deltaSO1 / 3.0_c_double
+    
+    ! HintSOC (same as before)
+    HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC(3,5) = -ii
+    HintSOC(3,8) = (1.0_c_double, 0.0_c_double)
+    HintSOC(4,6) = ii
+    HintSOC(4,7) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(5,3) = ii
+    HintSOC(5,8) = -ii
+    HintSOC(6,4) = -ii
+    HintSOC(6,7) = -ii
+    HintSOC(7,4) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(7,6) = ii
+    HintSOC(8,3) = (1.0_c_double, 0.0_c_double)
+    HintSOC(8,5) = ii
+    
+    ! Pb on-site
+    Pb = (0.0_c_double, 0.0_c_double)
+    Pb(1,1) = cmplx(Es0, 0.0_c_double, c_double_complex)
+    Pb(2,2) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(3,3) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(4,4) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+
+    ! I1 on-site (same for I2, I3)
+    I1 = (0.0_c_double, 0.0_c_double)
+    I1(1,1) = cmplx(Es1, 0.0_c_double, c_double_complex)
+    I1(2,2) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(3,3) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(4,4) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    
+    ! Pb-I hopping along x (Tx)
+    Tx = (0.0_c_double, 0.0_c_double)
+    Tx(1,1) = cmplx(2.0_c_double * Vss * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(1,2) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,2) = cmplx(2.0_c_double * Vppsig * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(3,3) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(4,4) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    
+    ! Pb-I hopping along y (Ty)
+    Ty = (0.0_c_double, 0.0_c_double)
+    Ty(1,1) = cmplx(2.0_c_double * Vss * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(1,3) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(2,2) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(3,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(3,3) = cmplx(2.0_c_double * Vppsig * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(4,4) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    
+    ! Pb-I hopping along z (Tz)
+    Tz = (0.0_c_double, 0.0_c_double)
+    Tz(1,1) = cmplx(2.0_c_double * Vss * cos(kz * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tz(1,4) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kz * a / 2.0_c_double), c_double_complex)
+    Tz(2,2) = cmplx(2.0_c_double * Vpppi * cos(kz * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tz(3,3) = cmplx(2.0_c_double * Vpppi * cos(kz * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tz(4,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kz * a / 2.0_c_double), c_double_complex)
+    Tz(4,4) = cmplx(2.0_c_double * Vppsig * cos(kz * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    
+    ! --- I-I hopping matrices (4x4) ---
+    ! I1-I2
+    I1_I2 = (0.0_c_double, 0.0_c_double)
+    I1_I2(1,1) = cmplx(4.0_c_double * Vss_II * cos(kx*a/2.0_c_double) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(1,2) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double) * cos(ky*a/2.0_c_double))
+    I1_I2(1,3) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double) * sin(ky*a/2.0_c_double))
+    ! I1_I2(1,4) = 0
+    
+    I1_I2(2,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double) * cos(ky*a/2.0_c_double))
+    I1_I2(2,2) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double) * cos(ky*a/2.0_c_double), 0.0_c_double)
+    I1_I2(2,3) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double) * sin(ky*a/2.0_c_double), 0.0_c_double)
+    ! I1_I2(2,4) = 0
+    
+    I1_I2(3,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double) * sin(ky*a/2.0_c_double))
+    I1_I2(3,2) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double) * sin(ky*a/2.0_c_double), 0.0_c_double)
+    I1_I2(3,3) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double) * cos(ky*a/2.0_c_double), 0.0_c_double)
+    ! I1_I2(3,4) = 0
+    
+    I1_I2(4,4) = cmplx(4.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double) * cos(ky*a/2.0_c_double), 0.0_c_double)
+    
+    ! I1-I3
+    I1_I3 = (0.0_c_double, 0.0_c_double)
+    I1_I3(1,1) = cmplx(4.0_c_double * Vss_II * cos(kx*a/2.0_c_double) * cos(kz*a/2.0_c_double), 0.0_c_double)
+    I1_I3(1,2) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double) * cos(kz*a/2.0_c_double))
+    I1_I3(1,4) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double) * sin(kz*a/2.0_c_double))
+    
+    I1_I3(2,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double) * cos(kz*a/2.0_c_double))
+    I1_I3(2,2) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double) * cos(kz*a/2.0_c_double), 0.0_c_double)
+    I1_I3(2,4) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double) * sin(kz*a/2.0_c_double), 0.0_c_double)
+    
+    I1_I3(3,3) = cmplx(4.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double) * cos(kz*a/2.0_c_double), 0.0_c_double)
+    
+    I1_I3(4,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double) * sin(kz*a/2.0_c_double))
+    I1_I3(4,2) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double) * sin(kz*a/2.0_c_double), 0.0_c_double)
+    I1_I3(4,4) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double) * cos(kz*a/2.0_c_double), 0.0_c_double)
+    
+    ! I2-I3
+    I2_I3 = (0.0_c_double, 0.0_c_double)
+    I2_I3(1,1) = cmplx(4.0_c_double * Vss_II * cos(ky*a/2.0_c_double) * cos(kz*a/2.0_c_double), 0.0_c_double)
+    I2_I3(1,3) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double) * cos(kz*a/2.0_c_double))
+    I2_I3(1,4) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double) * sin(kz*a/2.0_c_double))
+    
+    I2_I3(2,2) = cmplx(4.0_c_double * Vpppi_II * cos(ky*a/2.0_c_double) * cos(kz*a/2.0_c_double), 0.0_c_double)
+    
+    I2_I3(3,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double) * cos(kz*a/2.0_c_double))
+    I2_I3(3,3) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double) * cos(kz*a/2.0_c_double), 0.0_c_double)
+    I2_I3(3,4) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double) * sin(kz*a/2.0_c_double), 0.0_c_double)
+    
+    I2_I3(4,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double) * sin(kz*a/2.0_c_double))
+    I2_I3(4,3) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double) * sin(kz*a/2.0_c_double), 0.0_c_double)
+    I2_I3(4,4) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double) * cos(kz*a/2.0_c_double), 0.0_c_double)
+    
+    ! --- Build the 16x16 Hk ---
+    Hk = (0.0_c_double, 0.0_c_double)
+    ! Pb block
+    Hk(1:4, 1:4) = Pb
+    ! Pb-I couplings
+    Hk(1:4, 5:8)   = Tx
+    Hk(1:4, 9:12)  = Ty
+    Hk(1:4, 13:16) = Tz
+    Hk(5:8, 1:4)   = conjg(transpose(Tx))
+    Hk(9:12, 1:4)  = conjg(transpose(Ty))
+    Hk(13:16, 1:4) = conjg(transpose(Tz))
+    ! I on-site (all three I sites have the same on-site matrix I1)
+    Hk(5:8, 5:8)    = I1
+    Hk(9:12, 9:12)  = I1
+    Hk(13:16, 13:16)= I1
+    ! I-I coupling blocks
+    Hk(5:8, 9:12)   = I1_I2
+    Hk(9:12, 5:8)   = conjg(transpose(I1_I2))
+    Hk(5:8, 13:16)  = I1_I3
+    Hk(13:16, 5:8)  = conjg(transpose(I1_I3))
+    Hk(9:12, 13:16) = I2_I3
+    Hk(13:16, 9:12) = conjg(transpose(I2_I3))
+    
+    ! --- Expand to 32x32 with spin ---
+    ham = (0.0_c_double, 0.0_c_double)
+    do i = 1, 16
+        do j = 1, 16
+            ham(2*i-1, 2*j-1) = Hk(i, j)
+            ham(2*i,   2*j)   = Hk(i, j)
+        end do
+    end do
+    
+    ! --- Add spin-orbit coupling (SOC) ---
+    do i = 1, 8
+        do j = 1, 8
+            ham(i, j)         = ham(i, j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ham(8+i, 8+j)     = ham(8+i, 8+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(16+i, 16+j)   = ham(16+i, 16+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(24+i, 24+j)   = ham(24+i, 24+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+        end do
+    end do
+    
+end subroutine hamiltonian_cubic3d_2nd
+! ============================================================
+! 2D n1 version (40x40)
+! ============================================================
+subroutine hamiltonian_cubic2d_n1(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                  Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                  deltaSO0, deltaSO1, ham, n) bind(C, name="hamiltonian_cubic2d_n1")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(out) :: ham
+
+    real(c_double) :: a, lamd1, lamd2
+    complex(c_double_complex) :: ii
+    complex(c_double_complex), dimension(4,4) :: Pb, I1, zero4
+    complex(c_double_complex), dimension(4,4) :: Tx, Ty, T_neu1, T_neu2
+    complex(c_double_complex), dimension(20,20) :: Hk
+    complex(c_double_complex), dimension(8,8) :: HintSOC
+    integer :: i, j
+
+    a = 6.28_c_double
+    ii = (0.0_c_double, 1.0_c_double)
+    lamd1 = 2.0_c_double * deltaSO0 / 3.0_c_double
+    lamd2 = 2.0_c_double * deltaSO1 / 3.0_c_double
+    zero4 = (0.0_c_double, 0.0_c_double)
+
+    ! Initialize HintSOC (same as before)
+     HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC(3,5) = -ii
+    HintSOC(3,8) = (1.0_c_double, 0.0_c_double)
+    HintSOC(4,6) = ii
+    HintSOC(4,7) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(5,3) = ii
+    HintSOC(5,8) = -ii
+    HintSOC(6,4) = -ii
+    HintSOC(6,7) = -ii
+    HintSOC(7,4) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(7,6) = ii
+    HintSOC(8,3) = (1.0_c_double, 0.0_c_double)
+    HintSOC(8,5) = ii
+
+    ! Pb and I1
+    Pb = zero4
+    Pb(1,1) = cmplx(Es0, 0.0_c_double, c_double_complex)
+    Pb(2,2) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(3,3) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(4,4) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+
+    I1 = zero4
+    I1(1,1) = cmplx(Es1, 0.0_c_double, c_double_complex)
+    I1(2,2) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(3,3) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(4,4) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+
+    ! Tx (x-direction hopping)
+    Tx = zero4
+    Tx(1,1) = cmplx(2.0_c_double * Vss * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(1,2) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,2) = cmplx(2.0_c_double * Vppsig * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(3,3) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(4,4) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! Ty (y-direction hopping)
+    Ty = zero4
+    Ty(1,1) = cmplx(2.0_c_double * Vss * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(1,3) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(2,2) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(3,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(3,3) = cmplx(2.0_c_double * Vppsig * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(4,4) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! T_neu1 (first neighbor along z? Actually it's the constant hopping from Pb_I3_array)
+    T_neu1 = zero4
+    T_neu1(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu1(1,4) = cmplx(Vsp, 0.0_c_double, c_double_complex)
+    T_neu1(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(4,1) = cmplx(Vps, 0.0_c_double, c_double_complex)
+    T_neu1(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! T_neu2 (second neighbor with -Vsp, -Vps)
+    T_neu2 = zero4
+    T_neu2(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu2(1,4) = cmplx(-Vsp, 0.0_c_double, c_double_complex)
+    T_neu2(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(4,1) = cmplx(-Vps, 0.0_c_double, c_double_complex)
+    T_neu2(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! Build Hk (20x20) from 5x5 blocks (each block 4x4)
+    Hk = (0.0_c_double, 0.0_c_double)
+    ! Row 1: Pb, Tx, Ty, T_neu1, T_neu2
+    Hk(1:4, 1:4) = Pb
+    Hk(1:4, 5:8) = Tx
+    Hk(1:4, 9:12) = Ty
+    Hk(1:4, 13:16) = T_neu1
+    Hk(1:4, 17:20) = T_neu2
+    ! Row 2: conjg(transpose(Tx)), I1, zeros, zeros, zeros
+    Hk(5:8, 1:4) = conjg(transpose(Tx))
+    Hk(5:8, 5:8) = I1
+    ! Row 3: conjg(transpose(Ty)), zeros, I1, zeros, zeros
+    Hk(9:12, 1:4) = conjg(transpose(Ty))
+    Hk(9:12, 9:12) = I1
+    ! Row 4: conjg(transpose(T_neu1)), zeros, zeros, I1, zeros
+    Hk(13:16, 1:4) = conjg(transpose(T_neu1))
+    Hk(13:16, 13:16) = I1
+    ! Row 5: conjg(transpose(T_neu2)), zeros, zeros, zeros, I1
+    Hk(17:20, 1:4) = conjg(transpose(T_neu2))
+    Hk(17:20, 17:20) = I1
+
+    ! Kronecker product with spin (2x2 identity) -> 40x40
+    ham = (0.0_c_double, 0.0_c_double)
+    do i = 1, 20
+        do j = 1, 20
+            ham(2*i-1, 2*j-1) = Hk(i, j)
+            ham(2*i, 2*j) = Hk(i, j)
+        end do
+    end do
+
+    ! Add SOC terms (block diagonal with 5 blocks: first block lamd1/2, rest lamd2/2)
+    do i = 1, 8
+        do j = 1, 8
+            ham(i, j) = ham(i, j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ham(8+i, 8+j) = ham(8+i, 8+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(16+i, 16+j) = ham(16+i, 16+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(24+i, 24+j) = ham(24+i, 24+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(32+i, 32+j) = ham(32+i, 32+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+        end do
+    end do
+
+end subroutine hamiltonian_cubic2d_n1
+
+subroutine hamiltonian_cubic2d_n1_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                  Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                  deltaSO0, deltaSO1, &
+                                  Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &   ! new I-I parameters
+                                  ham, n) bind(C, name="hamiltonian_cubic2d_n1_2nd")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(out) :: ham
+
+    real(c_double) :: a, lamd1, lamd2
+    complex(c_double_complex) :: ii
+    complex(c_double_complex), dimension(4,4) :: Pb, I1, zero4
+    complex(c_double_complex), dimension(4,4) :: Tx, Ty, T_neu1, T_neu2
+    complex(c_double_complex), dimension(4,4) :: I1_I2, I1_I3, I2_I3, I2_I4, I3_I4   ! new
+    complex(c_double_complex), dimension(20,20) :: Hk
+    complex(c_double_complex), dimension(8,8) :: HintSOC
+    integer :: i, j
+
+    a = 6.28_c_double
+    ii = (0.0_c_double, 1.0_c_double)
+    lamd1 = 2.0_c_double * deltaSO0 / 3.0_c_double
+    lamd2 = 2.0_c_double * deltaSO1 / 3.0_c_double
+    zero4 = (0.0_c_double, 0.0_c_double)
+
+    ! HintSOC (same as before)
+    HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC(3,5) = -ii
+    HintSOC(3,8) = (1.0_c_double, 0.0_c_double)
+    HintSOC(4,6) = ii
+    HintSOC(4,7) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(5,3) = ii
+    HintSOC(5,8) = -ii
+    HintSOC(6,4) = -ii
+    HintSOC(6,7) = -ii
+    HintSOC(7,4) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(7,6) = ii
+    HintSOC(8,3) = (1.0_c_double, 0.0_c_double)
+    HintSOC(8,5) = ii
+
+    ! Pb on-site
+    Pb = zero4
+    Pb(1,1) = cmplx(Es0, 0.0_c_double, c_double_complex)
+    Pb(2,2) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(3,3) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(4,4) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+
+    ! I1 on-site (same for all I sites in this model)
+    I1 = zero4
+    I1(1,1) = cmplx(Es1, 0.0_c_double, c_double_complex)
+    I1(2,2) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(3,3) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(4,4) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+
+    ! Pb-I hopping along x (Tx)
+    Tx = zero4
+    Tx(1,1) = cmplx(2.0_c_double * Vss * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(1,2) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,2) = cmplx(2.0_c_double * Vppsig * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(3,3) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(4,4) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! Pb-I hopping along y (Ty)
+    Ty = zero4
+    Ty(1,1) = cmplx(2.0_c_double * Vss * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(1,3) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(2,2) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(3,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(3,3) = cmplx(2.0_c_double * Vppsig * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(4,4) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! Pb-I1 (constant term, from Python: Pb_I1_array)
+    T_neu1 = zero4
+    T_neu1(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu1(1,4) = cmplx(Vsp, 0.0_c_double, c_double_complex)
+    T_neu1(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(4,1) = cmplx(Vps, 0.0_c_double, c_double_complex)
+    T_neu1(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! Pb-I4 (constant term with sign flips: Pb_I4_array)
+    T_neu2 = zero4
+    T_neu2(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu2(1,4) = cmplx(-Vsp, 0.0_c_double, c_double_complex)
+    T_neu2(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(4,1) = cmplx(-Vps, 0.0_c_double, c_double_complex)
+    T_neu2(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! ----- I-I hopping matrices (4x4) -----
+    ! I1-I2
+    I1_I2 = zero4
+    I1_I2(1,1) = cmplx(2.0_c_double * Vss_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(1,2) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I2(2,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(2,2) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(2,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+
+    I1_I2(3,3) = cmplx(2.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I2(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(4,2) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I1-I3
+    I1_I3 = zero4
+    I1_I3(1,1) = cmplx(2.0_c_double * Vss_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(1,3) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I3(2,2) = cmplx(2.0_c_double * Vpppi_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I3(3,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(3,3) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(3,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+
+    I1_I3(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(4,3) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I2-I3
+    I2_I3 = zero4
+    I2_I3(1,1) = cmplx(4.0_c_double * Vss_II * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I3(1,2) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double),&
+                 c_double_complex)
+    I2_I3(1,3) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double),&
+                 c_double_complex)
+    ! I2_I3(1,4) = 0
+
+    I2_I3(2,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double),&
+                  c_double_complex)
+    I2_I3(2,2) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double,&
+                 c_double_complex)
+    I2_I3(2,3) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double), 0.0_c_double,&
+                 c_double_complex)
+    ! I2_I3(2,4) = 0
+
+    I2_I3(3,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double),&
+                c_double_complex)
+    I2_I3(3,2) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double), 0.0_c_double,&
+                c_double_complex)
+    I2_I3(3,3) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double,&
+                 c_double_complex)
+    ! I2_I3(3,4) = 0
+
+    I2_I3(4,4) = cmplx(4.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I2-I4 (same as I1-I2 but with different indices)
+    I2_I4 = zero4
+    I2_I4(1,1) = cmplx(2.0_c_double * Vss_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I4(1,2) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I2_I4(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I2_I4(2,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I2_I4(2,2) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I4(2,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+
+    I2_I4(3,3) = cmplx(2.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I2_I4(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I4(4,2) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+    I2_I4(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I3-I4 (same as I1-I3 but with different indices)
+    I3_I4 = zero4
+    I3_I4(1,1) = cmplx(2.0_c_double * Vss_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I3_I4(1,3) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I3_I4(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I3_I4(2,2) = cmplx(2.0_c_double * Vpppi_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I3_I4(3,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I3_I4(3,3) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I3_I4(3,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+
+    I3_I4(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I3_I4(4,3) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+    I3_I4(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! ----- Build the 20x20 Hk -----
+    Hk = (0.0_c_double, 0.0_c_double)
+    ! Row block 1: Pb (indices 1-4)
+    Hk(1:4, 1:4) = Pb
+    Hk(1:4, 5:8) = T_neu1   ! slot 1 = apical-up
+    Hk(1:4, 9:12) = Tx      ! slot 2 = eq-x
+    Hk(1:4, 13:16) = Ty     ! slot 3 = eq-y
+    Hk(1:4, 17:20) = T_neu2 ! slot 4 = apical-down
+
+    ! Row block 2: I1 = apical-up (indices 5-8)
+    Hk(5:8, 1:4) = conjg(transpose(T_neu1))
+    Hk(5:8, 5:8) = I1
+    Hk(5:8, 9:12) = I1_I2
+    Hk(5:8, 13:16) = I1_I3
+    Hk(5:8, 17:20) = zero4   ! I1-I4 = 0
+
+    ! Row block 3: I2 = eq-x (indices 9-12)
+    Hk(9:12, 1:4) = conjg(transpose(Tx))
+    Hk(9:12, 5:8) = conjg(transpose(I1_I2))
+    Hk(9:12, 9:12) = I1
+    Hk(9:12, 13:16) = I2_I3
+    Hk(9:12, 17:20) = I2_I4
+
+    ! Row block 4: I3 = eq-y (indices 13-16)
+    Hk(13:16, 1:4) = conjg(transpose(Ty))
+    Hk(13:16, 5:8) = conjg(transpose(I1_I3))
+    Hk(13:16, 9:12) = conjg(transpose(I2_I3))
+    Hk(13:16, 13:16) = I1
+    Hk(13:16, 17:20) = I3_I4
+
+    ! Row block 5: I4 (indices 17-20)
+    Hk(17:20, 1:4) = conjg(transpose(T_neu2))
+    Hk(17:20, 5:8) = zero4
+    Hk(17:20, 9:12) = conjg(transpose(I2_I4))
+    Hk(17:20, 13:16) = conjg(transpose(I3_I4))
+    Hk(17:20, 17:20) = I1
+
+    ! ----- Expand to 40x40 with spin (Kronecker with 2x2 identity) -----
+    ham = (0.0_c_double, 0.0_c_double)
+    do i = 1, 20
+        do j = 1, 20
+            ham(2*i-1, 2*j-1) = Hk(i, j)
+            ham(2*i,   2*j)   = Hk(i, j)
+        end do
+    end do
+
+    ! ----- Add spin-orbit coupling (SOC) -----
+    do i = 1, 8
+        do j = 1, 8
+            ham(i, j)         = ham(i, j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ham(8+i, 8+j)     = ham(8+i, 8+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(16+i, 16+j)   = ham(16+i, 16+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(24+i, 24+j)   = ham(24+i, 24+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(32+i, 32+j)   = ham(32+i, 32+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+        end do
+    end do
+
+end subroutine hamiltonian_cubic2d_n1_2nd
+! ============================================================
+! 2D n2 version (72x72)
+! ============================================================
+subroutine hamiltonian_cubic2d_n2(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                  Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                  deltaSO0, deltaSO1, ham, n) bind(C, name="hamiltonian_cubic2d_n2")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(out) :: ham
+
+    real(c_double) :: a, lamd1, lamd2
+    complex(c_double_complex) :: ii
+    complex(c_double_complex), dimension(4,4) :: Pb, I1, zero4
+    complex(c_double_complex), dimension(4,4) :: Tx, Ty, T_neu1, T_neu2
+    complex(c_double_complex), dimension(36,36) :: Hk
+    complex(c_double_complex), dimension(8,8) :: HintSOC
+    integer :: i, j, idx
+
+    a = 6.28_c_double
+    ii = (0.0_c_double, 1.0_c_double)
+    lamd1 = 2.0_c_double * deltaSO0 / 3.0_c_double
+    lamd2 = 2.0_c_double * deltaSO1 / 3.0_c_double
+    zero4 = (0.0_c_double, 0.0_c_double)
+
+    ! Initialize HintSOC (same as before)
+    HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC(3,5) = -ii
+    HintSOC(3,8) = (1.0_c_double, 0.0_c_double)
+    HintSOC(4,6) = ii
+    HintSOC(4,7) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(5,3) = ii
+    HintSOC(5,8) = -ii
+    HintSOC(6,4) = -ii
+    HintSOC(6,7) = -ii
+    HintSOC(7,4) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(7,6) = ii
+    HintSOC(8,3) = (1.0_c_double, 0.0_c_double)
+    HintSOC(8,5) = ii
+
+    ! Pb and I1
+    Pb = zero4
+    Pb(1,1) = cmplx(Es0, 0.0_c_double, c_double_complex)
+    Pb(2,2) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(3,3) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(4,4) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+
+    I1 = zero4
+    I1(1,1) = cmplx(Es1, 0.0_c_double, c_double_complex)
+    I1(2,2) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(3,3) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(4,4) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+
+    ! Tx (x-direction hopping) – same as before
+    Tx = zero4
+    Tx(1,1) = cmplx(2.0_c_double * Vss * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(1,2) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,2) = cmplx(2.0_c_double * Vppsig * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(3,3) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(4,4) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! Ty (y-direction hopping)
+    Ty = zero4
+    Ty(1,1) = cmplx(2.0_c_double * Vss * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(1,3) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(2,2) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(3,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(3,3) = cmplx(2.0_c_double * Vppsig * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(4,4) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! T_neu1 and T_neu2 (constant hopping)
+    T_neu1 = zero4
+    T_neu1(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu1(1,4) = cmplx(Vsp, 0.0_c_double, c_double_complex)
+    T_neu1(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(4,1) = cmplx(Vps, 0.0_c_double, c_double_complex)
+    T_neu1(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    T_neu2 = zero4
+    T_neu2(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu2(1,4) = cmplx(-Vsp, 0.0_c_double, c_double_complex)
+    T_neu2(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(4,1) = cmplx(-Vps, 0.0_c_double, c_double_complex)
+    T_neu2(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! Build Hk (36x36) from 9x9 blocks (each block 4x4)
+    Hk = (0.0_c_double, 0.0_c_double)
+
+    ! First super-row: Pb, zero, T_neu1, Tx, Ty, T_neu2, zero, zero, zero
+    Hk(1:4, 1:4) = Pb
+    Hk(1:4, 9:12) = T_neu1
+    Hk(1:4, 13:16) = Tx
+    Hk(1:4, 17:20) = Ty
+    Hk(1:4, 21:24) = T_neu2
+    ! Second super-row: zero, Pb, T_neu2, zero, zero, T_neu1, Tx, Ty, T_neu2? Wait need to follow Python's block structure.
+    ! Actually the Python code uses a 9x9 block matrix with the following pattern (from the code):
+    ! row1: [Pb, zero, Pb_I1, Pb_I2, Pb_I3, Pb_I4, zero, zero, zero]
+    ! row2: [zero, Pb, zero, zero, zero, Pb_I1, Pb_I2, Pb_I3, Pb_I4]
+    ! row3: [Pb_I1.conj().T, zero, I1, zero, zero, zero, zero, zero, zero]
+    ! row4: [Pb_I2.conj().T, zero, zero, I1, zero, zero, zero, zero, zero]
+    ! row5: [Pb_I3.conj().T, zero, zero, zero, I1, zero, zero, zero, zero]
+    ! row6: [Pb_I4.conj().T, Pb_I1.conj().T, zero, zero, zero, I1, zero, zero, zero]
+    ! row7: [zero, Pb_I2.conj().T, zero, zero, zero, zero, I1, zero, zero]
+    ! row8: [zero, Pb_I3.conj().T, zero, zero, zero, zero, zero, I1, zero]
+    ! row9: [zero, Pb_I4.conj().T, zero, zero, zero, zero, zero, zero, I1]
+    ! We'll implement accordingly.
+
+    ! Row1
+    Hk(1:4, 1:4) = Pb
+    Hk(1:4, 9:12) = T_neu1   ! Pb_I1
+    Hk(1:4, 13:16) = Tx      ! Pb_I2
+    Hk(1:4, 17:20) = Ty      ! Pb_I3
+    Hk(1:4, 21:24) = T_neu2  ! Pb_I4
+    ! Row2
+    Hk(5:8, 5:8) = Pb
+    Hk(5:8, 21:24) = T_neu1  ! Pb_I1
+    Hk(5:8, 25:28) = Tx      ! Pb_I2
+    Hk(5:8, 29:32) = Ty      ! Pb_I3
+    Hk(5:8, 33:36) = T_neu2  ! Pb_I4
+    ! Row3
+    Hk(9:12, 1:4) = conjg(transpose(T_neu1))
+    Hk(9:12, 9:12) = I1
+    ! Row4
+    Hk(13:16, 1:4) = conjg(transpose(Tx))
+    Hk(13:16, 13:16) = I1
+    ! Row5
+    Hk(17:20, 1:4) = conjg(transpose(Ty))
+    Hk(17:20, 17:20) = I1
+    ! Row6
+    Hk(21:24, 1:4) = conjg(transpose(T_neu2))
+    Hk(21:24, 5:8) = conjg(transpose(T_neu1))
+    Hk(21:24, 21:24) = I1
+    ! Row7
+    Hk(25:28, 5:8) = conjg(transpose(Tx))
+    Hk(25:28, 25:28) = I1
+    ! Row8
+    Hk(29:32, 5:8) = conjg(transpose(Ty))
+    Hk(29:32, 29:32) = I1
+    ! Row9
+    Hk(33:36, 5:8) = conjg(transpose(T_neu2))
+    Hk(33:36, 33:36) = I1
+
+    ! Kronecker product with spin (2x2 identity) -> 72x72
+    ham = (0.0_c_double, 0.0_c_double)
+    do i = 1, 36
+        do j = 1, 36
+            ham(2*i-1, 2*j-1) = Hk(i, j)
+            ham(2*i, 2*j) = Hk(i, j)
+        end do
+    end do
+
+    ! Add SOC terms (9 blocks: first two with lamd1/2? Actually Python uses:
+    ! first block: lamd1/2 for the first two Pb blocks? Wait Python code:
+    ! SOC = np.block([[HintSOC*lamd1/2, zero1_array, ...], [zero1_array, HintSOC*lamd1/2, ...], ... rest with lamd2/2])
+    ! The first two diagonal blocks are HintSOC*lamd1/2, the remaining 7 are HintSOC*lamd2/2.
+    ! So we have 9 blocks: blocks 1 and 2 use lamd1/2, blocks 3-9 use lamd2/2.
+    do i = 1, 8
+        do j = 1, 8
+            ! Block 1 (indices 1-8)
+            ham(i, j) = ham(i, j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ! Block 2 (indices 9-16)
+            ham(8+i, 8+j) = ham(8+i, 8+j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ! Blocks 3-9 (indices 17-24, 25-32, 33-40, 41-48, 49-56, 57-64, 65-72)
+            ham(16+i, 16+j) = ham(16+i, 16+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(24+i, 24+j) = ham(24+i, 24+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(32+i, 32+j) = ham(32+i, 32+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(40+i, 40+j) = ham(40+i, 40+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(48+i, 48+j) = ham(48+i, 48+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(56+i, 56+j) = ham(56+i, 56+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(64+i, 64+j) = ham(64+i, 64+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+        end do
+    end do
+
+end subroutine hamiltonian_cubic2d_n2
+
+subroutine hamiltonian_cubic2d_n2_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                  Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                  deltaSO0, deltaSO1, &
+                                  Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &   ! new I-I parameters
+                                  ham, n) bind(C, name="hamiltonian_cubic2d_n2_2nd")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(out) :: ham
+
+    real(c_double) :: a, lamd1, lamd2
+    complex(c_double_complex) :: ii
+    complex(c_double_complex), dimension(4,4) :: Pb, I1, zero4
+    complex(c_double_complex), dimension(4,4) :: Tx, Ty, T_neu1, T_neu2
+    complex(c_double_complex), dimension(4,4) :: I1_I2, I1_I3, I2_I3, I2_I4, I3_I4   ! I-I hopping matrices
+    complex(c_double_complex), dimension(36,36) :: Hk
+    complex(c_double_complex), dimension(8,8) :: HintSOC
+    integer :: i, j
+
+    a = 6.28_c_double
+    ii = (0.0_c_double, 1.0_c_double)
+    lamd1 = 2.0_c_double * deltaSO0 / 3.0_c_double
+    lamd2 = 2.0_c_double * deltaSO1 / 3.0_c_double
+    zero4 = (0.0_c_double, 0.0_c_double)
+
+    ! HintSOC (same as before)
+    HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC(3,5) = -ii
+    HintSOC(3,8) = (1.0_c_double, 0.0_c_double)
+    HintSOC(4,6) = ii
+    HintSOC(4,7) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(5,3) = ii
+    HintSOC(5,8) = -ii
+    HintSOC(6,4) = -ii
+    HintSOC(6,7) = -ii
+    HintSOC(7,4) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(7,6) = ii
+    HintSOC(8,3) = (1.0_c_double, 0.0_c_double)
+    HintSOC(8,5) = ii
+
+    ! Pb on-site
+    Pb = zero4
+    Pb(1,1) = cmplx(Es0, 0.0_c_double, c_double_complex)
+    Pb(2,2) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(3,3) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(4,4) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+
+    ! I1 on-site (same for all I sites)
+    I1 = zero4
+    I1(1,1) = cmplx(Es1, 0.0_c_double, c_double_complex)
+    I1(2,2) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(3,3) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(4,4) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+
+    ! ---- Pb-I hopping matrices (same as before) ----
+    ! Pb_I2 (along x)
+    Tx = zero4
+    Tx(1,1) = cmplx(2.0_c_double * Vss * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(1,2) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,2) = cmplx(2.0_c_double * Vppsig * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(3,3) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(4,4) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! Pb_I3 (along y)
+    Ty = zero4
+    Ty(1,1) = cmplx(2.0_c_double * Vss * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(1,3) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(2,2) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(3,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(3,3) = cmplx(2.0_c_double * Vppsig * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(4,4) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! Pb_I1 (constant, +Vsp, +Vps)
+    T_neu1 = zero4
+    T_neu1(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu1(1,4) = cmplx(Vsp, 0.0_c_double, c_double_complex)
+    T_neu1(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(4,1) = cmplx(Vps, 0.0_c_double, c_double_complex)
+    T_neu1(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! Pb_I4 (constant, -Vsp, -Vps)
+    T_neu2 = zero4
+    T_neu2(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu2(1,4) = cmplx(-Vsp, 0.0_c_double, c_double_complex)
+    T_neu2(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(4,1) = cmplx(-Vps, 0.0_c_double, c_double_complex)
+    T_neu2(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! ---- I-I hopping matrices (4x4) ----
+    ! I1-I2
+    I1_I2 = zero4
+    I1_I2(1,1) = cmplx(2.0_c_double * Vss_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(1,2) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I2(2,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(2,2) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(2,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+
+    I1_I2(3,3) = cmplx(2.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I2(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(4,2) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I1-I3
+    I1_I3 = zero4
+    I1_I3(1,1) = cmplx(2.0_c_double * Vss_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(1,3) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I3(2,2) = cmplx(2.0_c_double * Vpppi_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I3(3,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(3,3) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(3,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+
+    I1_I3(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(4,3) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I2-I3
+    I2_I3 = zero4
+    I2_I3(1,1) = cmplx(4.0_c_double * Vss_II * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I3(1,2) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double),&
+     c_double_complex)
+    I2_I3(1,3) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double),&
+     c_double_complex)
+
+    I2_I3(2,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double),&
+     c_double_complex)
+    I2_I3(2,2) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double,&
+     c_double_complex)
+    I2_I3(2,3) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double), 0.0_c_double,&
+     c_double_complex)
+
+    I2_I3(3,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double),&
+     c_double_complex)
+    I2_I3(3,2) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double), 0.0_c_double,&
+     c_double_complex)
+    I2_I3(3,3) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double,&
+     c_double_complex)
+
+    I2_I3(4,4) = cmplx(4.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I2-I4 (same form as I1-I2)
+    I2_I4 = zero4
+    I2_I4(1,1) = cmplx(2.0_c_double * Vss_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I4(1,2) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I2_I4(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I2_I4(2,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I2_I4(2,2) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I4(2,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+
+    I2_I4(3,3) = cmplx(2.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I2_I4(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I4(4,2) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+    I2_I4(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I3-I4 (same form as I1-I3)
+    I3_I4 = zero4
+    I3_I4(1,1) = cmplx(2.0_c_double * Vss_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I3_I4(1,3) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I3_I4(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I3_I4(2,2) = cmplx(2.0_c_double * Vpppi_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I3_I4(3,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I3_I4(3,3) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I3_I4(3,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+
+    I3_I4(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I3_I4(4,3) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+    I3_I4(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! ---- Build the 36x36 Hk (9x9 blocks of 4x4) ----
+    Hk = (0.0_c_double, 0.0_c_double)
+
+    ! Super-row 0 (Pb at (0,0))
+    Hk(1:4, 1:4) = Pb
+    Hk(1:4, 9:12) = T_neu1   ! Pb_I1
+    Hk(1:4, 13:16) = Tx      ! Pb_I2
+    Hk(1:4, 17:20) = Ty      ! Pb_I3
+    Hk(1:4, 21:24) = T_neu2  ! Pb_I4
+    ! Super-row 1 (Pb at (0,1))
+    Hk(5:8, 5:8) = Pb
+    Hk(5:8, 21:24) = T_neu1  ! Pb_I1
+    Hk(5:8, 25:28) = Tx      ! Pb_I2
+    Hk(5:8, 29:32) = Ty      ! Pb_I3
+    Hk(5:8, 33:36) = T_neu2  ! Pb_I4
+    ! Super-row 2 (I1 from first cell)
+    Hk(9:12, 1:4) = conjg(transpose(T_neu1))
+    Hk(9:12, 9:12) = I1
+    Hk(9:12, 13:16) = I1_I2
+    Hk(9:12, 17:20) = I1_I3
+    ! Super-row 3 (I2 from first cell)
+    Hk(13:16, 1:4) = conjg(transpose(Tx))
+    Hk(13:16, 9:12) = conjg(transpose(I1_I2))
+    Hk(13:16, 13:16) = I1
+    Hk(13:16, 17:20) = I2_I3
+    Hk(13:16, 21:24) = I2_I4
+    ! Super-row 4 (I3 from first cell)
+    Hk(17:20, 1:4) = conjg(transpose(Ty))
+    Hk(17:20, 9:12) = conjg(transpose(I1_I3))
+    Hk(17:20, 13:16) = conjg(transpose(I2_I3))
+    Hk(17:20, 17:20) = I1
+    Hk(17:20, 21:24) = I3_I4
+    ! Super-row 5 (I4 from first cell / I1 from second cell)
+    Hk(21:24, 1:4) = conjg(transpose(T_neu2))
+    Hk(21:24, 5:8) = conjg(transpose(T_neu1))
+    Hk(21:24, 13:16) = conjg(transpose(I2_I4))
+    Hk(21:24, 17:20) = conjg(transpose(I3_I4))
+    Hk(21:24, 21:24) = I1
+    Hk(21:24, 25:28) = I1_I2
+    Hk(21:24, 29:32) = I1_I3
+    ! Super-row 6 (I2 from second cell)
+    Hk(25:28, 5:8) = conjg(transpose(Tx))
+    Hk(25:28, 21:24) = conjg(transpose(I1_I2))
+    Hk(25:28, 25:28) = I1
+    Hk(25:28, 29:32) = I2_I3
+    Hk(25:28, 33:36) = I2_I4
+    ! Super-row 7 (I3 from second cell)
+    Hk(29:32, 5:8) = conjg(transpose(Ty))
+    Hk(29:32, 21:24) = conjg(transpose(I1_I3))
+    Hk(29:32, 25:28) = conjg(transpose(I2_I3))
+    Hk(29:32, 29:32) = I1
+    Hk(29:32, 33:36) = I3_I4
+    ! Super-row 8 (I4 from second cell)
+    Hk(33:36, 5:8) = conjg(transpose(T_neu2))
+    Hk(33:36, 21:24) = conjg(transpose(I2_I4))  ! Note: Python has zero in (8,5) but transpose(I2_I4) in (8,6)? Wait careful:
+    ! According to Python block: row8 (index 8) col5 (index5) is I2_I4^H? Actually row8 = [0, Pb_I4^H, 0,0,0,0, I2_I4^H, I3_I4^H, I1]
+    ! We have super-row 8 = indices 33-36, and super-columns: 0 (1-4), 1 (5-8), 2 (9-12), 3 (13-16), 4 (17-20), 5 (21-24), 6 (25-28), 7 (29-32), 8 (33-36)
+    ! So: (8,1) = Pb_I4^H, (8,6) = I2_I4^H, (8,7) = I3_I4^H, (8,8) = I1.
+    Hk(33:36, 5:8) = conjg(transpose(T_neu2))
+    Hk(33:36, 25:28) = conjg(transpose(I2_I4))
+    Hk(33:36, 29:32) = conjg(transpose(I3_I4))
+    Hk(33:36, 33:36) = I1
+
+    ! ---- Expand to 72x72 with spin (Kronecker with 2x2 identity) ----
+    ham = (0.0_c_double, 0.0_c_double)
+    do i = 1, 36
+        do j = 1, 36
+            ham(2*i-1, 2*j-1) = Hk(i, j)
+            ham(2*i,   2*j)   = Hk(i, j)
+        end do
+    end do
+
+    ! ---- Add spin-orbit coupling (SOC) ----
+    ! Python SOC: first two diagonal blocks (Pb at (0,0) and (0,1)) use lamd1/2,
+    ! the remaining 7 blocks (I1..I4 from both cells) use lamd2/2.
+    do i = 1, 8
+        do j = 1, 8
+            ! Block 1 (Pb cell 1) -> indices 1-8
+            ham(i, j) = ham(i, j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ! Block 2 (Pb cell 2) -> indices 9-16
+            ham(8+i, 8+j) = ham(8+i, 8+j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ! Blocks 3-9 (I1..I4 from both cells) -> indices 17-72
+            ham(16+i, 16+j) = ham(16+i, 16+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(24+i, 24+j) = ham(24+i, 24+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(32+i, 32+j) = ham(32+i, 32+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(40+i, 40+j) = ham(40+i, 40+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(48+i, 48+j) = ham(48+i, 48+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(56+i, 56+j) = ham(56+i, 56+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(64+i, 64+j) = ham(64+i, 64+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+        end do
+    end do
+
+end subroutine hamiltonian_cubic2d_n2_2nd
+! ============================================================
+! 2D n3 version (104x104)
+! ============================================================
+subroutine hamiltonian_cubic2d_n3(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                  Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                  deltaSO0, deltaSO1, ham, n) bind(C, name="hamiltonian_cubic2d_n3")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(out) :: ham
+
+    real(c_double) :: a, lamd1, lamd2
+    complex(c_double_complex) :: ii
+    complex(c_double_complex), dimension(4,4) :: Pb, I1, zero4
+    complex(c_double_complex), dimension(4,4) :: Tx, Ty, T_neu1, T_neu2
+    complex(c_double_complex), dimension(52,52) :: Hk
+    complex(c_double_complex), dimension(8,8) :: HintSOC
+    integer :: i, j, ib, jb
+
+    a = 6.28_c_double
+    ii = (0.0_c_double, 1.0_c_double)
+    lamd1 = 2.0_c_double * deltaSO0 / 3.0_c_double
+    lamd2 = 2.0_c_double * deltaSO1 / 3.0_c_double
+    zero4 = (0.0_c_double, 0.0_c_double)
+
+    ! Initialize HintSOC
+    HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC(3,5) = -ii
+    HintSOC(3,8) = (1.0_c_double, 0.0_c_double)
+    HintSOC(4,6) = ii
+    HintSOC(4,7) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(5,3) = ii
+    HintSOC(5,8) = -ii
+    HintSOC(6,4) = -ii
+    HintSOC(6,7) = -ii
+    HintSOC(7,4) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(7,6) = ii
+    HintSOC(8,3) = (1.0_c_double, 0.0_c_double)
+    HintSOC(8,5) = ii
+
+    ! Pb and I1 matrices
+    Pb = zero4
+    Pb(1,1) = cmplx(Es0, 0.0_c_double, c_double_complex)
+    Pb(2,2) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(3,3) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(4,4) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+
+    I1 = zero4
+    I1(1,1) = cmplx(Es1, 0.0_c_double, c_double_complex)
+    I1(2,2) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(3,3) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(4,4) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+
+    ! Tx (x-direction hopping) - corresponds to Pb_I2_array
+    Tx = zero4
+    Tx(1,1) = cmplx(2.0_c_double * Vss * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(1,2) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,2) = cmplx(2.0_c_double * Vppsig * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(3,3) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(4,4) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! Ty (y-direction hopping) - corresponds to Pb_I3_array
+    Ty = zero4
+    Ty(1,1) = cmplx(2.0_c_double * Vss * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(1,3) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(2,2) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(3,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(3,3) = cmplx(2.0_c_double * Vppsig * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(4,4) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! T_neu1 (constant hopping) - corresponds to Pb_I1_array
+    T_neu1 = zero4
+    T_neu1(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu1(1,4) = cmplx(Vsp, 0.0_c_double, c_double_complex)
+    T_neu1(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(4,1) = cmplx(Vps, 0.0_c_double, c_double_complex)
+    T_neu1(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! T_neu2 (constant hopping with sign flips) - corresponds to Pb_I4_array
+    T_neu2 = zero4
+    T_neu2(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu2(1,4) = cmplx(-Vsp, 0.0_c_double, c_double_complex)
+    T_neu2(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(4,1) = cmplx(-Vps, 0.0_c_double, c_double_complex)
+    T_neu2(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! Build Hk (52x52) from 13x13 blocks (each block 4x4)
+    Hk = (0.0_c_double, 0.0_c_double)
+
+    ! Row 1: [Pb, zero, zero, T_neu1, Tx, Ty, T_neu2, zero, zero, zero, zero, zero, zero]
+    Hk(1:4, 1:4) = Pb
+    Hk(1:4, 13:16) = T_neu1   ! block column 4 (1-indexed: 4th block -> indices 13-16)
+    Hk(1:4, 17:20) = Tx       ! block column 5
+    Hk(1:4, 21:24) = Ty       ! block column 6
+    Hk(1:4, 25:28) = T_neu2   ! block column 7
+
+    ! Row 2: [zero, Pb, zero, zero, zero, zero, T_neu1, Tx, Ty, T_neu2, zero, zero, zero]
+    Hk(5:8, 5:8) = Pb
+    Hk(5:8, 25:28) = T_neu1   ! block column 7
+    Hk(5:8, 29:32) = Tx       ! block column 8
+    Hk(5:8, 33:36) = Ty       ! block column 9
+    Hk(5:8, 37:40) = T_neu2   ! block column 10
+
+    ! Row 3: [zero, zero, Pb, zero, zero, zero, zero, zero, zero, T_neu1, Tx, Ty, T_neu2]
+    Hk(9:12, 9:12) = Pb
+    Hk(9:12, 37:40) = T_neu1  ! block column 10
+    Hk(9:12, 41:44) = Tx      ! block column 11
+    Hk(9:12, 45:48) = Ty      ! block column 12
+    Hk(9:12, 49:52) = T_neu2  ! block column 13
+
+    ! Row 4: [T_neu1^H, zero, zero, I1, zero, zero, zero, zero, zero, zero, zero, zero, zero]
+    Hk(13:16, 1:4) = conjg(transpose(T_neu1))
+    Hk(13:16, 13:16) = I1
+
+    ! Row 5: [Tx^H, zero, zero, zero, I1, zero, zero, zero, zero, zero, zero, zero, zero]
+    Hk(17:20, 1:4) = conjg(transpose(Tx))
+    Hk(17:20, 17:20) = I1
+
+    ! Row 6: [Ty^H, zero, zero, zero, zero, I1, zero, zero, zero, zero, zero, zero, zero]
+    Hk(21:24, 1:4) = conjg(transpose(Ty))
+    Hk(21:24, 21:24) = I1
+
+    ! Row 7: [T_neu2^H, T_neu1^H, zero, zero, zero, zero, I1, zero, zero, zero, zero, zero, zero]
+    Hk(25:28, 1:4) = conjg(transpose(T_neu2))
+    Hk(25:28, 5:8) = conjg(transpose(T_neu1))
+    Hk(25:28, 25:28) = I1
+
+    ! Row 8: [zero, Tx^H, zero, zero, zero, zero, zero, I1, zero, zero, zero, zero, zero]
+    Hk(29:32, 5:8) = conjg(transpose(Tx))
+    Hk(29:32, 29:32) = I1
+
+    ! Row 9: [zero, Ty^H, zero, zero, zero, zero, zero, zero, I1, zero, zero, zero, zero]
+    Hk(33:36, 5:8) = conjg(transpose(Ty))
+    Hk(33:36, 33:36) = I1
+
+    ! Row 10: [zero, T_neu2^H, T_neu1^H, zero, zero, zero, zero, zero, zero, I1, zero, zero, zero]
+    Hk(37:40, 5:8) = conjg(transpose(T_neu2))
+    Hk(37:40, 9:12) = conjg(transpose(T_neu1))
+    Hk(37:40, 37:40) = I1
+
+    ! Row 11: [zero, zero, Tx^H, zero, zero, zero, zero, zero, zero, zero, I1, zero, zero]
+    Hk(41:44, 9:12) = conjg(transpose(Tx))
+    Hk(41:44, 41:44) = I1
+
+    ! Row 12: [zero, zero, Ty^H, zero, zero, zero, zero, zero, zero, zero, zero, I1, zero]
+    Hk(45:48, 9:12) = conjg(transpose(Ty))
+    Hk(45:48, 45:48) = I1
+
+    ! Row 13: [zero, zero, T_neu2^H, zero, zero, zero, zero, zero, zero, zero, zero, zero, I1]
+    Hk(49:52, 9:12) = conjg(transpose(T_neu2))
+    Hk(49:52, 49:52) = I1
+
+    ! Kronecker product with spin (2x2 identity) -> 104x104
+    ham = (0.0_c_double, 0.0_c_double)
+    do i = 1, 52
+        do j = 1, 52
+            ham(2*i-1, 2*j-1) = Hk(i, j)
+            ham(2*i, 2*j) = Hk(i, j)
+        end do
+    end do
+
+    ! Add SOC terms (13 diagonal blocks, each 8x8)
+    do i = 1, 8
+        do j = 1, 8
+            ! Blocks 1,2,3 use lamd1/2
+            ham(i, j) = ham(i, j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ham(8+i, 8+j) = ham(8+i, 8+j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ham(16+i, 16+j) = ham(16+i, 16+j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ! Blocks 4 through 13 use lamd2/2
+            ham(24+i, 24+j) = ham(24+i, 24+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(32+i, 32+j) = ham(32+i, 32+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(40+i, 40+j) = ham(40+i, 40+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(48+i, 48+j) = ham(48+i, 48+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(56+i, 56+j) = ham(56+i, 56+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(64+i, 64+j) = ham(64+i, 64+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(72+i, 72+j) = ham(72+i, 72+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(80+i, 80+j) = ham(80+i, 80+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(88+i, 88+j) = ham(88+i, 88+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(96+i, 96+j) = ham(96+i, 96+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+        end do
+    end do
+
+end subroutine hamiltonian_cubic2d_n3
+
+subroutine hamiltonian_cubic2d_n3_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                  Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                  deltaSO0, deltaSO1, &
+                                  Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &
+                                  ham, n) bind(C, name="hamiltonian_cubic2d_n3_2nd")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(out) :: ham
+
+    real(c_double) :: a, lamd1, lamd2
+    complex(c_double_complex) :: ii
+    complex(c_double_complex), dimension(4,4) :: Pb, I1, zero4
+    complex(c_double_complex), dimension(4,4) :: Tx, Ty, T_neu1, T_neu2
+    complex(c_double_complex), dimension(4,4) :: I1_I2, I1_I3, I2_I3, I2_I4, I3_I4
+    complex(c_double_complex), dimension(52,52) :: Hk
+    complex(c_double_complex), dimension(8,8) :: HintSOC
+    integer :: i, j
+
+    a = 6.28_c_double
+    ii = (0.0_c_double, 1.0_c_double)
+    lamd1 = 2.0_c_double * deltaSO0 / 3.0_c_double
+    lamd2 = 2.0_c_double * deltaSO1 / 3.0_c_double
+    zero4 = (0.0_c_double, 0.0_c_double)
+
+    ! HintSOC (same as before)
+    HintSOC = (0.0_c_double, 0.0_c_double)
+    HintSOC(3,5) = -ii
+    HintSOC(3,8) = (1.0_c_double, 0.0_c_double)
+    HintSOC(4,6) = ii
+    HintSOC(4,7) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(5,3) = ii
+    HintSOC(5,8) = -ii
+    HintSOC(6,4) = -ii
+    HintSOC(6,7) = -ii
+    HintSOC(7,4) = (-1.0_c_double, 0.0_c_double)
+    HintSOC(7,6) = ii
+    HintSOC(8,3) = (1.0_c_double, 0.0_c_double)
+    HintSOC(8,5) = ii
+
+    ! Pb on-site
+    Pb = zero4
+    Pb(1,1) = cmplx(Es0, 0.0_c_double, c_double_complex)
+    Pb(2,2) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(3,3) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+    Pb(4,4) = cmplx(Ep0, 0.0_c_double, c_double_complex)
+
+    ! I1 on-site (same for all I atoms)
+    I1 = zero4
+    I1(1,1) = cmplx(Es1, 0.0_c_double, c_double_complex)
+    I1(2,2) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(3,3) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+    I1(4,4) = cmplx(Ep1, 0.0_c_double, c_double_complex)
+
+    ! Pb-I hopping matrices (unchanged)
+    ! Tx = Pb_I2 (x-direction)
+    Tx = zero4
+    Tx(1,1) = cmplx(2.0_c_double * Vss * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(1,2) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(kx * a / 2.0_c_double), c_double_complex)
+    Tx(2,2) = cmplx(2.0_c_double * Vppsig * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(3,3) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Tx(4,4) = cmplx(2.0_c_double * Vpppi * cos(kx * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! Ty = Pb_I3 (y-direction)
+    Ty = zero4
+    Ty(1,1) = cmplx(2.0_c_double * Vss * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(1,3) = cmplx(0.0_c_double, 2.0_c_double * Vsp * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(2,2) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(3,1) = cmplx(0.0_c_double, 2.0_c_double * Vps * sin(ky * a / 2.0_c_double), c_double_complex)
+    Ty(3,3) = cmplx(2.0_c_double * Vppsig * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+    Ty(4,4) = cmplx(2.0_c_double * Vpppi * cos(ky * a / 2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! T_neu1 = Pb_I1 (constant, +Vsp, +Vps)
+    T_neu1 = zero4
+    T_neu1(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu1(1,4) = cmplx(Vsp, 0.0_c_double, c_double_complex)
+    T_neu1(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu1(4,1) = cmplx(Vps, 0.0_c_double, c_double_complex)
+    T_neu1(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! T_neu2 = Pb_I4 (constant, -Vsp, -Vps)
+    T_neu2 = zero4
+    T_neu2(1,1) = cmplx(Vss, 0.0_c_double, c_double_complex)
+    T_neu2(1,4) = cmplx(-Vsp, 0.0_c_double, c_double_complex)
+    T_neu2(2,2) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(3,3) = cmplx(Vpppi, 0.0_c_double, c_double_complex)
+    T_neu2(4,1) = cmplx(-Vps, 0.0_c_double, c_double_complex)
+    T_neu2(4,4) = cmplx(Vppsig, 0.0_c_double, c_double_complex)
+
+    ! ----- I-I hopping matrices (identical to n2) -----
+    ! I1-I2
+    I1_I2 = zero4
+    I1_I2(1,1) = cmplx(2.0_c_double * Vss_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(1,2) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I2(2,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(2,2) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(2,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+
+    I1_I2(3,3) = cmplx(2.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I2(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I2(4,2) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double), c_double_complex)
+    I1_I2(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I1-I3
+    I1_I3 = zero4
+    I1_I3(1,1) = cmplx(2.0_c_double * Vss_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(1,3) = cmplx(0.0_c_double, sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(1,4) = cmplx(-sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I3(2,2) = cmplx(2.0_c_double * Vpppi_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    I1_I3(3,1) = cmplx(0.0_c_double, -sqrt(2.0_c_double) * Vsp_II * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(3,3) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(3,4) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+
+    I1_I3(4,1) = cmplx(sqrt(2.0_c_double) * Vsp_II * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I1_I3(4,3) = cmplx(0.0_c_double, (Vpppi_II - Vppsig_II) * sin(ky*a/2.0_c_double), c_double_complex)
+    I1_I3(4,4) = cmplx((Vpppi_II + Vppsig_II) * cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I2-I3
+    I2_I3 = zero4
+    I2_I3(1,1) = cmplx(4.0_c_double * Vss_II * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+    I2_I3(1,2) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double),&
+     c_double_complex)
+    I2_I3(1,3) = cmplx(0.0_c_double, 2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double),&
+     c_double_complex)
+
+    I2_I3(2,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * sin(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double),&
+     c_double_complex)
+    I2_I3(2,2) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double,&
+     c_double_complex)
+    I2_I3(2,3) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double), 0.0_c_double,&
+     c_double_complex)
+
+    I2_I3(3,1) = cmplx(0.0_c_double, -2.0_c_double * sqrt(2.0_c_double) * Vsp_II * cos(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double),&
+     c_double_complex)
+    I2_I3(3,2) = cmplx(2.0_c_double * (Vpppi_II - Vppsig_II) * sin(kx*a/2.0_c_double)*sin(ky*a/2.0_c_double), 0.0_c_double,&
+     c_double_complex)
+    I2_I3(3,3) = cmplx(2.0_c_double * (Vpppi_II + Vppsig_II) * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double,&
+     c_double_complex)
+
+    I2_I3(4,4) = cmplx(4.0_c_double * Vpppi_II * cos(kx*a/2.0_c_double)*cos(ky*a/2.0_c_double), 0.0_c_double, c_double_complex)
+
+    ! I2-I4 (same as I1-I2)
+    I2_I4 = I1_I2
+
+    ! I3-I4 (same as I1-I3)
+    I3_I4 = I1_I3
+
+    ! ---- Build the 52x52 Hk (13x13 superblocks of 4x4) ----
+    Hk = (0.0_c_double, 0.0_c_double)
+
+    ! Row block 1 (Pb at (0,0))
+    Hk(1:4, 1:4) = Pb
+    Hk(1:4, 13:16) = T_neu1   ! Pb_I1
+    Hk(1:4, 17:20) = Tx       ! Pb_I2
+    Hk(1:4, 21:24) = Ty       ! Pb_I3
+    Hk(1:4, 25:28) = T_neu2   ! Pb_I4
+
+    ! Row block 2 (Pb at (0,1))
+    Hk(5:8, 5:8) = Pb
+    Hk(5:8, 25:28) = T_neu1   ! Pb_I1
+    Hk(5:8, 29:32) = Tx       ! Pb_I2
+    Hk(5:8, 33:36) = Ty       ! Pb_I3
+    Hk(5:8, 37:40) = T_neu2   ! Pb_I4
+
+    ! Row block 3 (Pb at (0,2))
+    Hk(9:12, 9:12) = Pb
+    Hk(9:12, 37:40) = T_neu1  ! Pb_I1
+    Hk(9:12, 41:44) = Tx      ! Pb_I2
+    Hk(9:12, 45:48) = Ty      ! Pb_I3
+    Hk(9:12, 49:52) = T_neu2  ! Pb_I4
+
+    ! Row block 4 (I1_c1)
+    Hk(13:16, 1:4) = conjg(transpose(T_neu1))
+    Hk(13:16, 13:16) = I1
+    Hk(13:16, 17:20) = I1_I2
+    Hk(13:16, 21:24) = I1_I3
+
+    ! Row block 5 (I2_c1)
+    Hk(17:20, 1:4) = conjg(transpose(Tx))
+    Hk(17:20, 13:16) = conjg(transpose(I1_I2))
+    Hk(17:20, 17:20) = I1
+    Hk(17:20, 21:24) = I2_I3
+    Hk(17:20, 25:28) = I2_I4
+
+    ! Row block 6 (I3_c1)
+    Hk(21:24, 1:4) = conjg(transpose(Ty))
+    Hk(21:24, 13:16) = conjg(transpose(I1_I3))
+    Hk(21:24, 17:20) = conjg(transpose(I2_I3))
+    Hk(21:24, 21:24) = I1
+    Hk(21:24, 25:28) = I3_I4
+
+    ! Row block 7 (I4_c1 / I1_c2)
+    Hk(25:28, 1:4) = conjg(transpose(T_neu2))
+    Hk(25:28, 5:8) = conjg(transpose(T_neu1))
+    Hk(25:28, 17:20) = conjg(transpose(I2_I4))
+    Hk(25:28, 21:24) = conjg(transpose(I3_I4))
+    Hk(25:28, 25:28) = I1
+    Hk(25:28, 29:32) = I1_I2
+    Hk(25:28, 33:36) = I1_I3
+
+    ! Row block 8 (I2_c2)
+    Hk(29:32, 5:8) = conjg(transpose(Tx))
+    Hk(29:32, 25:28) = conjg(transpose(I1_I2))
+    Hk(29:32, 29:32) = I1
+    Hk(29:32, 33:36) = I2_I3
+    Hk(29:32, 37:40) = I2_I4
+
+    ! Row block 9 (I3_c2)
+    Hk(33:36, 5:8) = conjg(transpose(Ty))
+    Hk(33:36, 25:28) = conjg(transpose(I1_I3))
+    Hk(33:36, 29:32) = conjg(transpose(I2_I3))
+    Hk(33:36, 33:36) = I1
+    Hk(33:36, 37:40) = I3_I4
+
+    ! Row block 10 (I4_c2 / I1_c3)
+    Hk(37:40, 5:8) = conjg(transpose(T_neu2))
+    Hk(37:40, 9:12) = conjg(transpose(T_neu1))
+    Hk(37:40, 29:32) = conjg(transpose(I2_I4))
+    Hk(37:40, 33:36) = conjg(transpose(I3_I4))
+    Hk(37:40, 37:40) = I1
+    Hk(37:40, 41:44) = I1_I2
+    Hk(37:40, 45:48) = I1_I3
+
+    ! Row block 11 (I2_c3)
+    Hk(41:44, 9:12) = conjg(transpose(Tx))
+    Hk(41:44, 37:40) = conjg(transpose(I1_I2))
+    Hk(41:44, 41:44) = I1
+    Hk(41:44, 45:48) = I2_I3
+    Hk(41:44, 49:52) = I2_I4
+
+    ! Row block 12 (I3_c3)
+    Hk(45:48, 9:12) = conjg(transpose(Ty))
+    Hk(45:48, 37:40) = conjg(transpose(I1_I3))
+    Hk(45:48, 41:44) = conjg(transpose(I2_I3))
+    Hk(45:48, 45:48) = I1
+    Hk(45:48, 49:52) = I3_I4
+
+    ! Row block 13 (I4_c3)
+    Hk(49:52, 9:12) = conjg(transpose(T_neu2))
+    Hk(49:52, 41:44) = conjg(transpose(I2_I4))
+    Hk(49:52, 45:48) = conjg(transpose(I3_I4))
+    Hk(49:52, 49:52) = I1
+
+    ! ---- Expand to 104x104 with spin (Kronecker with 2x2 identity) ----
+    ham = (0.0_c_double, 0.0_c_double)
+    do i = 1, 52
+        do j = 1, 52
+            ham(2*i-1, 2*j-1) = Hk(i, j)
+            ham(2*i,   2*j)   = Hk(i, j)
+        end do
+    end do
+
+    ! ---- Add spin-orbit coupling (SOC) ----
+    ! Python SOC: first three diagonal blocks (Pb1, Pb2, Pb3) use lamd1/2,
+    ! the remaining 10 blocks (I1..I4 from three cells) use lamd2/2.
+    do i = 1, 8
+        do j = 1, 8
+            ! Blocks 1,2,3 (Pb atoms)
+            ham(i, j)         = ham(i, j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ham(8+i, 8+j)     = ham(8+i, 8+j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ham(16+i, 16+j)   = ham(16+i, 16+j) + HintSOC(i, j) * (lamd1 / 2.0_c_double)
+            ! Blocks 4 through 13 (I atoms)
+            ham(24+i, 24+j)   = ham(24+i, 24+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(32+i, 32+j)   = ham(32+i, 32+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(40+i, 40+j)   = ham(40+i, 40+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(48+i, 48+j)   = ham(48+i, 48+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(56+i, 56+j)   = ham(56+i, 56+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(64+i, 64+j)   = ham(64+i, 64+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(72+i, 72+j)   = ham(72+i, 72+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(80+i, 80+j)   = ham(80+i, 80+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(88+i, 88+j)   = ham(88+i, 88+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+            ham(96+i, 96+j)   = ham(96+i, 96+j) + HintSOC(i, j) * (lamd2 / 2.0_c_double)
+        end do
+    end do
+
+end subroutine hamiltonian_cubic2d_n3_2nd
+
+! ============================================================
+! Diagonalization wrapper (uses LAPACK's ZHEEV)
+! ============================================================
+subroutine diagonalize_hamiltonian(ham, eigenvalues, n) bind(C, name="diagonalize_hamiltonian")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+    real(c_double), dimension(n), intent(out) :: eigenvalues
+    
+    character(len=1) :: jobz = 'V', uplo = 'U'
+    integer :: lwork, info
+    real(c_double), allocatable :: rwork(:)
+    complex(c_double_complex), allocatable :: work(:)
+    integer :: i
+    
+    ! Allocate workspace for ZHEEV
+    allocate(rwork(3*n-2))
+    
+    ! Query optimal work size
+    lwork = -1
+    allocate(work(1))
+    call zheev(jobz, uplo, n, ham, n, eigenvalues, work, lwork, rwork, info)
+    lwork = int(real(work(1)))
+    deallocate(work)
+    
+    ! Perform diagonalization
+    allocate(work(lwork))
+    call zheev(jobz, uplo, n, ham, n, eigenvalues, work, lwork, rwork, info)
+    deallocate(work, rwork)
+    
+    if (info /= 0) then
+        print *, "ZHEEV failed with info =", info
+    end if
+    
+end subroutine diagonalize_hamiltonian
+
+
+! ============================================================
+! Alternative: Compute only eigenvalues (faster)
+! ============================================================
+subroutine eigenvalues_only(ham, eigenvalues, n) bind(C, name="eigenvalues_only")
+    use, intrinsic :: iso_c_binding
+    implicit none
+    integer(c_int), intent(in), value :: n
+    complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+    real(c_double), dimension(n), intent(out) :: eigenvalues
+    
+    character(len=1) :: jobz = 'N', uplo = 'U'  ! 'N' = eigenvalues only
+    integer :: lwork, info
+    real(c_double), allocatable :: rwork(:)
+    complex(c_double_complex), allocatable :: work(:)
+    
+    ! Allocate workspace
+    allocate(rwork(3*n-2))
+    
+    ! Query optimal work size
+    lwork = -1
+    allocate(work(1))
+    call zheev(jobz, uplo, n, ham, n, eigenvalues, work, lwork, rwork, info)
+    lwork = int(real(work(1)))
+    deallocate(work)
+    
+    ! Perform diagonalization (eigenvalues only)
+    allocate(work(lwork))
+    call zheev(jobz, uplo, n, ham, n, eigenvalues, work, lwork, rwork, info)
+    deallocate(work, rwork)
+    
+    if (info /= 0) then
+        print *, "ZHEEV failed with info =", info
+    end if
+    
+end subroutine eigenvalues_only
+
+subroutine effective_mass_3d(kx, ky, kz, band_idx, &
+                             ax, ay, az, eps, &
+                             Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             inv_mass, n) bind(C, name="effective_mass_3d")
+    use, intrinsic :: iso_c_binding
+	
+	implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    integer(c_int), intent(in), value :: band_idx
+    real(c_double), intent(in), value :: ax, ay, az
+    real(c_double), intent(in), value :: eps
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), dimension(3), intent(out) :: inv_mass
+    integer(c_int), intent(in), value :: n
+	
+	complex(c_double_complex), dimension(n, n):: ham
+	real(c_double), dimension(n):: eigenvalues
+	
+    real(c_double) :: dkx, dky, dkz
+    real(c_double) :: e0, e_xm, e_xp, e_ym, e_yp, e_zm, e_zp
+    real(c_double) :: dex_m, dex_p, dey_m, dey_p, dez_m, dez_p
+    real(c_double) :: d2ex, d2ey, d2ez
+    real(c_double) :: d2ex_SI, d2ey_SI, d2ez_SI
+    real(c_double) :: inv_mass_SI_x, inv_mass_SI_y, inv_mass_SI_z
+    real(c_double) :: conv_factor
+    real(c_double), parameter :: hbar = 1.0545718e-34_c_double
+    real(c_double), parameter :: m0   = 9.10938356e-31_c_double
+    real(c_double), parameter :: eV_to_J = 1.60217662e-19_c_double
+	
+	    ! ------------------------------------------------------------------
+    ! Explicit interfaces for the external subroutines (no underscores)
+    ! ------------------------------------------------------------------
+    interface
+        subroutine hamiltonian_cubic3d(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                       Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                       deltaSO0, deltaSO1, ham, n) &
+                bind(C, name="hamiltonian_cubic3d")
+            import :: c_double, c_int, c_double_complex
+            real(c_double), intent(in), value :: kx, ky, kz
+            real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+            real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+            real(c_double), intent(in), value :: deltaSO0, deltaSO1
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(out) :: ham
+        end subroutine hamiltonian_cubic3d
+
+        subroutine eigenvalues_only(ham, eigenvalues, n) &
+                bind(C, name="eigenvalues_only")
+            import :: c_double, c_int, c_double_complex
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+            real(c_double), dimension(n), intent(out) :: eigenvalues
+        end subroutine eigenvalues_only
+    end interface
+    ! ------------------------------------------------------------------
+
+    dkx = eps * 2.0_c_double * acos(-1.0_c_double) / ax
+    dky = eps * 2.0_c_double * acos(-1.0_c_double) / ay
+    dkz = eps * 2.0_c_double * acos(-1.0_c_double) / az
+	band_idx = band_idx + 1 ! Convert from 0-based to 1-based indexing for Fortran
+    ! --- Central point ---
+    call hamiltonian_cubic3d(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e0 = eigenvalues(band_idx)
+
+    ! --- Shifted points ---
+    call hamiltonian_cubic3d(kx - dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic3d(kx + dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xp = eigenvalues(band_idx)
+
+    call hamiltonian_cubic3d(kx, ky - dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_ym = eigenvalues(band_idx)
+
+    call hamiltonian_cubic3d(kx, ky + dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_yp = eigenvalues(band_idx)
+
+    call hamiltonian_cubic3d(kx, ky, kz - dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic3d(kx, ky, kz + dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zp = eigenvalues(band_idx)
+
+    ! --- First derivatives (eV·Å) ---
+    dex_m = (e_xm - e0) / (-dkx)
+    dex_p = (e0 - e_xp) / (-dkx)
+    dey_m = (e_ym - e0) / (-dky)
+    dey_p = (e0 - e_yp) / (-dky)
+    dez_m = (e_zm - e0) / (-dkz)
+    dez_p = (e0 - e_zp) / (-dkz)
+
+    ! --- Second derivatives (eV·Å²) ---
+    d2ex = (dex_m - dex_p) / (-dkx)
+    d2ey = (dey_m - dey_p) / (-dky)
+    d2ez = (dez_m - dez_p) / (-dkz)
+	
+	
+!	print *, e_xm - e0, dkx,eps,ax,2.0_c_double * acos(-1.0_c_double)
+!	print *, " --------- "
+!	print *,eigenvalues(:)
+	
+    ! --- Convert curvature to SI (J·m²) ---
+!    conv_factor = eV_to_J * (1.0e-10_c_double)**2
+    conv_factor=0.13123448563495618
+    d2ex_SI = d2ex * conv_factor
+    d2ey_SI = d2ey * conv_factor
+    d2ez_SI = d2ez * conv_factor
+
+    ! --- Inverse effective mass in SI (1/kg) ---
+    inv_mass_SI_x = d2ex_SI! / (hbar * hbar)
+    inv_mass_SI_y = d2ey_SI! / (hbar * hbar)
+    inv_mass_SI_z = d2ez_SI! / (hbar * hbar)
+
+    ! --- Convert to units of 1/m₀ ---
+    inv_mass(1) = inv_mass_SI_x! * m0
+    inv_mass(2) = inv_mass_SI_y! * m0
+    inv_mass(3) = inv_mass_SI_z! * m0
+
+end subroutine effective_mass_3d
+
+subroutine effective_mass_3d_2nd(kx, ky, kz, band_idx, &
+                             ax, ay, az, eps, &
+                             Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &   ! new II parameters
+                             inv_mass, n) bind(C, name="effective_mass_3d_2nd")
+    use, intrinsic :: iso_c_binding
+
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    integer(c_int), intent(in), value :: band_idx
+    real(c_double), intent(in), value :: ax, ay, az
+    real(c_double), intent(in), value :: eps
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II   ! new
+    real(c_double), dimension(3), intent(out) :: inv_mass
+    integer(c_int), intent(in), value :: n
+
+    complex(c_double_complex), dimension(n, n) :: ham
+    real(c_double), dimension(n) :: eigenvalues
+
+    real(c_double) :: dkx, dky, dkz
+    real(c_double) :: e0, e_xm, e_xp, e_ym, e_yp, e_zm, e_zp
+    real(c_double) :: dex_m, dex_p, dey_m, dey_p, dez_m, dez_p
+    real(c_double) :: d2ex, d2ey, d2ez
+    real(c_double) :: d2ex_SI, d2ey_SI, d2ez_SI
+    real(c_double) :: inv_mass_SI_x, inv_mass_SI_y, inv_mass_SI_z
+    real(c_double) :: conv_factor
+    real(c_double), parameter :: hbar = 1.0545718e-34_c_double
+    real(c_double), parameter :: m0   = 9.10938356e-31_c_double
+    real(c_double), parameter :: eV_to_J = 1.60217662e-19_c_double
+
+    ! ------------------------------------------------------------------
+    ! Explicit interfaces for the external subroutines (now with II parameters)
+    ! ------------------------------------------------------------------
+    interface
+        subroutine hamiltonian_cubic3d_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                       Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                       deltaSO0, deltaSO1, &
+                                       Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &
+                                       ham, n) &
+                bind(C, name="hamiltonian_cubic3d_2nd")
+            import :: c_double, c_int, c_double_complex
+            real(c_double), intent(in), value :: kx, ky, kz
+            real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+            real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+            real(c_double), intent(in), value :: deltaSO0, deltaSO1
+            real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(out) :: ham
+        end subroutine hamiltonian_cubic3d_2nd
+
+        subroutine eigenvalues_only(ham, eigenvalues, n) &
+                bind(C, name="eigenvalues_only")
+            import :: c_double, c_int, c_double_complex
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+            real(c_double), dimension(n), intent(out) :: eigenvalues
+        end subroutine eigenvalues_only
+    end interface
+    ! ------------------------------------------------------------------
+
+    dkx = eps * 2.0_c_double * acos(-1.0_c_double) / ax
+    dky = eps * 2.0_c_double * acos(-1.0_c_double) / ay
+    dkz = eps * 2.0_c_double * acos(-1.0_c_double) / az
+    band_idx = band_idx + 1 ! Convert from 0-based to 1-based indexing for Fortran
+    ! --- Central point ---
+    call hamiltonian_cubic3d_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e0 = eigenvalues(band_idx)
+
+    ! --- Shifted points along x ---
+    call hamiltonian_cubic3d_2nd(kx - dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic3d_2nd(kx + dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xp = eigenvalues(band_idx)
+
+    ! --- Shifted points along y ---
+    call hamiltonian_cubic3d_2nd(kx, ky - dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_ym = eigenvalues(band_idx)
+
+    call hamiltonian_cubic3d_2nd(kx, ky + dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_yp = eigenvalues(band_idx)
+
+    ! --- Shifted points along z ---
+    call hamiltonian_cubic3d_2nd(kx, ky, kz - dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic3d_2nd(kx, ky, kz + dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zp = eigenvalues(band_idx)
+
+    ! --- First derivatives (eV·Å) ---
+    dex_m = (e_xm - e0) / (-dkx)
+    dex_p = (e0 - e_xp) / (-dkx)
+    dey_m = (e_ym - e0) / (-dky)
+    dey_p = (e0 - e_yp) / (-dky)
+    dez_m = (e_zm - e0) / (-dkz)
+    dez_p = (e0 - e_zp) / (-dkz)
+
+    ! --- Second derivatives (eV·Å²) ---
+    d2ex = (dex_m - dex_p) / (-dkx)
+    d2ey = (dey_m - dey_p) / (-dky)
+    d2ez = (dez_m - dez_p) / (-dkz)
+
+    ! --- Convert curvature to SI (J·m²) using pre‑computed factor ---
+    conv_factor = 0.13123448563495618_c_double   ! includes eV→J, Å→m, and hbar² if needed
+    d2ex_SI = d2ex * conv_factor
+    d2ey_SI = d2ey * conv_factor
+    d2ez_SI = d2ez * conv_factor
+
+    ! --- Inverse effective mass in SI (1/kg) ---
+    inv_mass_SI_x = d2ex_SI
+    inv_mass_SI_y = d2ey_SI
+    inv_mass_SI_z = d2ez_SI
+
+    ! --- Convert to units of 1/m₀ (electron rest mass) ---
+    inv_mass(1) = inv_mass_SI_x
+    inv_mass(2) = inv_mass_SI_y
+    inv_mass(3) = inv_mass_SI_z
+
+end subroutine effective_mass_3d_2nd
+
+subroutine effective_mass_2dn1(kx, ky, kz, band_idx, &
+                             ax, ay, az, eps, &
+                             Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             inv_mass, n) bind(C, name="effective_mass_2dn1")
+    use, intrinsic :: iso_c_binding
+	
+	implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    integer(c_int), intent(in), value :: band_idx
+    real(c_double), intent(in), value :: ax, ay, az
+    real(c_double), intent(in), value :: eps
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), dimension(3), intent(out) :: inv_mass
+    integer(c_int), intent(in), value :: n
+	
+	complex(c_double_complex), dimension(n, n):: ham
+	real(c_double), dimension(n):: eigenvalues
+	
+    real(c_double) :: dkx, dky, dkz
+    real(c_double) :: e0, e_xm, e_xp, e_ym, e_yp, e_zm, e_zp
+    real(c_double) :: dex_m, dex_p, dey_m, dey_p, dez_m, dez_p
+    real(c_double) :: d2ex, d2ey, d2ez
+    real(c_double) :: d2ex_SI, d2ey_SI, d2ez_SI
+    real(c_double) :: inv_mass_SI_x, inv_mass_SI_y, inv_mass_SI_z
+    real(c_double) :: conv_factor
+    real(c_double), parameter :: hbar = 1.0545718e-34_c_double
+    real(c_double), parameter :: m0   = 9.10938356e-31_c_double
+    real(c_double), parameter :: eV_to_J = 1.60217662e-19_c_double
+	
+	    ! ------------------------------------------------------------------
+    ! Explicit interfaces for the external subroutines (no underscores)
+    ! ------------------------------------------------------------------
+    interface
+        subroutine hamiltonian_cubic2d_n1(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                       Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                       deltaSO0, deltaSO1, ham, n) &
+                bind(C, name="hamiltonian_cubic2d_n1")
+            import :: c_double, c_int, c_double_complex
+            real(c_double), intent(in), value :: kx, ky, kz
+            real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+            real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+            real(c_double), intent(in), value :: deltaSO0, deltaSO1
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(out) :: ham
+        end subroutine hamiltonian_cubic2d_n1
+
+        subroutine eigenvalues_only(ham, eigenvalues, n) &
+                bind(C, name="eigenvalues_only")
+            import :: c_double, c_int, c_double_complex
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+            real(c_double), dimension(n), intent(out) :: eigenvalues
+        end subroutine eigenvalues_only
+    end interface
+    ! ------------------------------------------------------------------
+
+    dkx = eps * 2.0_c_double * acos(-1.0_c_double) / ax
+    dky = eps * 2.0_c_double * acos(-1.0_c_double) / ay
+    dkz = eps * 2.0_c_double * acos(-1.0_c_double) / az
+	band_idx = band_idx + 1 ! Convert from 0-based to 1-based indexing for Fortran
+    ! --- Central point ---
+    call hamiltonian_cubic2d_n1(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e0 = eigenvalues(band_idx)
+
+    ! --- Shifted points ---
+    call hamiltonian_cubic2d_n1(kx - dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n1(kx + dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xp = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n1(kx, ky - dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_ym = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n1(kx, ky + dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_yp = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n1(kx, ky, kz - dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n1(kx, ky, kz + dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zp = eigenvalues(band_idx)
+
+    ! --- First derivatives (eV·Å) ---
+    dex_m = (e_xm - e0) / (-dkx)
+    dex_p = (e0 - e_xp) / (-dkx)
+    dey_m = (e_ym - e0) / (-dky)
+    dey_p = (e0 - e_yp) / (-dky)
+    dez_m = (e_zm - e0) / (-dkz)
+    dez_p = (e0 - e_zp) / (-dkz)
+
+    ! --- Second derivatives (eV·Å²) ---
+    d2ex = (dex_m - dex_p) / (-dkx)
+    d2ey = (dey_m - dey_p) / (-dky)
+    d2ez = (dez_m - dez_p) / (-dkz)
+	
+	
+!	print *, e_xm - e0, dkx,eps,ax,2.0_c_double * acos(-1.0_c_double)
+!	print *, " --------- "
+!	print *,eigenvalues(:)
+	
+    ! --- Convert curvature to SI (J·m²) ---
+!    conv_factor = eV_to_J * (1.0e-10_c_double)**2
+    conv_factor=0.13123448563495618
+    d2ex_SI = d2ex * conv_factor
+    d2ey_SI = d2ey * conv_factor
+    d2ez_SI = d2ez * conv_factor
+
+    ! --- Inverse effective mass in SI (1/kg) ---
+    inv_mass_SI_x = d2ex_SI! / (hbar * hbar)
+    inv_mass_SI_y = d2ey_SI! / (hbar * hbar)
+    inv_mass_SI_z = d2ez_SI! / (hbar * hbar)
+
+    ! --- Convert to units of 1/m₀ ---
+    inv_mass(1) = inv_mass_SI_x! * m0
+    inv_mass(2) = inv_mass_SI_y! * m0
+    inv_mass(3) = inv_mass_SI_z! * m0
+
+end subroutine effective_mass_2dn1
+
+subroutine effective_mass_2dn1_2nd(kx, ky, kz, band_idx, &
+                               ax, ay, az, eps, &
+                               Es0, Ep0, Es1, Ep1, &
+                               Vss, Vsp, Vps, Vppsig, Vpppi, &
+                               deltaSO0, deltaSO1, &
+                               Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &   ! new II parameters
+                               inv_mass, n) bind(C, name="effective_mass_2dn1_2nd")
+    use, intrinsic :: iso_c_binding
+
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    integer(c_int), intent(in), value :: band_idx
+    real(c_double), intent(in), value :: ax, ay, az
+    real(c_double), intent(in), value :: eps
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II   ! new
+    real(c_double), dimension(3), intent(out) :: inv_mass
+    integer(c_int), intent(in), value :: n
+
+    complex(c_double_complex), dimension(n, n) :: ham
+    real(c_double), dimension(n) :: eigenvalues
+
+    real(c_double) :: dkx, dky, dkz
+    real(c_double) :: e0, e_xm, e_xp, e_ym, e_yp, e_zm, e_zp
+    real(c_double) :: dex_m, dex_p, dey_m, dey_p, dez_m, dez_p
+    real(c_double) :: d2ex, d2ey, d2ez
+    real(c_double) :: d2ex_SI, d2ey_SI, d2ez_SI
+    real(c_double) :: inv_mass_SI_x, inv_mass_SI_y, inv_mass_SI_z
+    real(c_double) :: conv_factor
+    real(c_double), parameter :: hbar = 1.0545718e-34_c_double
+    real(c_double), parameter :: m0   = 9.10938356e-31_c_double
+    real(c_double), parameter :: eV_to_J = 1.60217662e-19_c_double
+
+    ! ------------------------------------------------------------------
+    ! Explicit interfaces for the external subroutines (now with II parameters)
+    ! ------------------------------------------------------------------
+    interface
+        subroutine hamiltonian_cubic2d_n1_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                          Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                          deltaSO0, deltaSO1, &
+                                          Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &
+                                          ham, n) &
+                bind(C, name="hamiltonian_cubic2d_n1_2nd")
+            import :: c_double, c_int, c_double_complex
+            real(c_double), intent(in), value :: kx, ky, kz
+            real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+            real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+            real(c_double), intent(in), value :: deltaSO0, deltaSO1
+            real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(out) :: ham
+        end subroutine hamiltonian_cubic2d_n1_2nd
+
+        subroutine eigenvalues_only(ham, eigenvalues, n) &
+                bind(C, name="eigenvalues_only")
+            import :: c_double, c_int, c_double_complex
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+            real(c_double), dimension(n), intent(out) :: eigenvalues
+        end subroutine eigenvalues_only
+    end interface
+    ! ------------------------------------------------------------------
+
+    dkx = eps * 2.0_c_double * acos(-1.0_c_double) / ax
+    dky = eps * 2.0_c_double * acos(-1.0_c_double) / ay
+    dkz = eps * 2.0_c_double * acos(-1.0_c_double) / az
+    band_idx = band_idx + 1 ! Convert from 0-based to 1-based indexing for Fortran
+    ! --- Central point ---
+    call hamiltonian_cubic2d_n1_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e0 = eigenvalues(band_idx)
+
+    ! --- Shifted points along x ---
+    call hamiltonian_cubic2d_n1_2nd(kx - dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n1_2nd(kx + dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xp = eigenvalues(band_idx)
+
+    ! --- Shifted points along y ---
+    call hamiltonian_cubic2d_n1_2nd(kx, ky - dky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_ym = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n1_2nd(kx, ky + dky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_yp = eigenvalues(band_idx)
+
+    ! --- Shifted points along z ---
+    call hamiltonian_cubic2d_n1_2nd(kx, ky, kz - dkz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n1_2nd(kx, ky, kz + dkz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zp = eigenvalues(band_idx)
+
+    ! --- First derivatives (eV·Å) ---
+    dex_m = (e_xm - e0) / (-dkx)
+    dex_p = (e0 - e_xp) / (-dkx)
+    dey_m = (e_ym - e0) / (-dky)
+    dey_p = (e0 - e_yp) / (-dky)
+    dez_m = (e_zm - e0) / (-dkz)
+    dez_p = (e0 - e_zp) / (-dkz)
+
+    ! --- Second derivatives (eV·Å²) ---
+    d2ex = (dex_m - dex_p) / (-dkx)
+    d2ey = (dey_m - dey_p) / (-dky)
+    d2ez = (dez_m - dez_p) / (-dkz)
+
+    ! --- Convert curvature to SI (J·m²) using pre‑computed factor ---
+    conv_factor = 0.13123448563495618_c_double
+    d2ex_SI = d2ex * conv_factor
+    d2ey_SI = d2ey * conv_factor
+    d2ez_SI = d2ez * conv_factor
+
+    ! --- Inverse effective mass in SI (1/kg) ---
+    inv_mass_SI_x = d2ex_SI
+    inv_mass_SI_y = d2ey_SI
+    inv_mass_SI_z = d2ez_SI
+
+    ! --- Convert to units of 1/m₀ ---
+    inv_mass(1) = inv_mass_SI_x
+    inv_mass(2) = inv_mass_SI_y
+    inv_mass(3) = inv_mass_SI_z
+
+end subroutine effective_mass_2dn1_2nd
+
+subroutine effective_mass_2dn2(kx, ky, kz, band_idx, &
+                             ax, ay, az, eps, &
+                             Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             inv_mass, n) bind(C, name="effective_mass_2dn2")
+    use, intrinsic :: iso_c_binding
+	
+	implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    integer(c_int), intent(in), value :: band_idx
+    real(c_double), intent(in), value :: ax, ay, az
+    real(c_double), intent(in), value :: eps
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), dimension(3), intent(out) :: inv_mass
+    integer(c_int), intent(in), value :: n
+	
+	complex(c_double_complex), dimension(n, n):: ham
+	real(c_double), dimension(n):: eigenvalues
+	
+    real(c_double) :: dkx, dky, dkz
+    real(c_double) :: e0, e_xm, e_xp, e_ym, e_yp, e_zm, e_zp
+    real(c_double) :: dex_m, dex_p, dey_m, dey_p, dez_m, dez_p
+    real(c_double) :: d2ex, d2ey, d2ez
+    real(c_double) :: d2ex_SI, d2ey_SI, d2ez_SI
+    real(c_double) :: inv_mass_SI_x, inv_mass_SI_y, inv_mass_SI_z
+    real(c_double) :: conv_factor
+    real(c_double), parameter :: hbar = 1.0545718e-34_c_double
+    real(c_double), parameter :: m0   = 9.10938356e-31_c_double
+    real(c_double), parameter :: eV_to_J = 1.60217662e-19_c_double
+	
+	    ! ------------------------------------------------------------------
+    ! Explicit interfaces for the external subroutines (no underscores)
+    ! ------------------------------------------------------------------
+    interface
+        subroutine hamiltonian_cubic2d_n2(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                       Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                       deltaSO0, deltaSO1, ham, n) &
+                bind(C, name="hamiltonian_cubic2d_n2")
+            import :: c_double, c_int, c_double_complex
+            real(c_double), intent(in), value :: kx, ky, kz
+            real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+            real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+            real(c_double), intent(in), value :: deltaSO0, deltaSO1
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(out) :: ham
+        end subroutine hamiltonian_cubic2d_n2
+
+        subroutine eigenvalues_only(ham, eigenvalues, n) &
+                bind(C, name="eigenvalues_only")
+            import :: c_double, c_int, c_double_complex
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+            real(c_double), dimension(n), intent(out) :: eigenvalues
+        end subroutine eigenvalues_only
+    end interface
+    ! ------------------------------------------------------------------
+
+    dkx = eps * 2.0_c_double * acos(-1.0_c_double) / ax
+    dky = eps * 2.0_c_double * acos(-1.0_c_double) / ay
+    dkz = eps * 2.0_c_double * acos(-1.0_c_double) / az
+	band_idx = band_idx + 1 ! Convert from 0-based to 1-based indexing for Fortran
+    ! --- Central point ---
+    call hamiltonian_cubic2d_n2(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e0 = eigenvalues(band_idx)
+
+    ! --- Shifted points ---
+    call hamiltonian_cubic2d_n2(kx - dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n2(kx + dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xp = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n2(kx, ky - dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_ym = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n2(kx, ky + dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_yp = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n2(kx, ky, kz - dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n2(kx, ky, kz + dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zp = eigenvalues(band_idx)
+
+    ! --- First derivatives (eV·Å) ---
+    dex_m = (e_xm - e0) / (-dkx)
+    dex_p = (e0 - e_xp) / (-dkx)
+    dey_m = (e_ym - e0) / (-dky)
+    dey_p = (e0 - e_yp) / (-dky)
+    dez_m = (e_zm - e0) / (-dkz)
+    dez_p = (e0 - e_zp) / (-dkz)
+
+    ! --- Second derivatives (eV·Å²) ---
+    d2ex = (dex_m - dex_p) / (-dkx)
+    d2ey = (dey_m - dey_p) / (-dky)
+    d2ez = (dez_m - dez_p) / (-dkz)
+	
+	
+!	print *, e_xm - e0, dkx,eps,ax,2.0_c_double * acos(-1.0_c_double)
+!	print *, " --------- "
+!	print *,eigenvalues(:)
+	
+    ! --- Convert curvature to SI (J·m²) ---
+!    conv_factor = eV_to_J * (1.0e-10_c_double)**2
+    conv_factor=0.13123448563495618
+    d2ex_SI = d2ex * conv_factor
+    d2ey_SI = d2ey * conv_factor
+    d2ez_SI = d2ez * conv_factor
+
+    ! --- Inverse effective mass in SI (1/kg) ---
+    inv_mass_SI_x = d2ex_SI! / (hbar * hbar)
+    inv_mass_SI_y = d2ey_SI! / (hbar * hbar)
+    inv_mass_SI_z = d2ez_SI! / (hbar * hbar)
+
+    ! --- Convert to units of 1/m₀ ---
+    inv_mass(1) = inv_mass_SI_x! * m0
+    inv_mass(2) = inv_mass_SI_y! * m0
+    inv_mass(3) = inv_mass_SI_z! * m0
+
+end subroutine effective_mass_2dn2
+
+subroutine effective_mass_2dn2_2nd(kx, ky, kz, band_idx, &
+                               ax, ay, az, eps, &
+                               Es0, Ep0, Es1, Ep1, &
+                               Vss, Vsp, Vps, Vppsig, Vpppi, &
+                               deltaSO0, deltaSO1, &
+                               Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &   ! new II parameters
+                               inv_mass, n) bind(C, name="effective_mass_2dn2_2nd")
+    use, intrinsic :: iso_c_binding
+
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    integer(c_int), intent(in), value :: band_idx
+    real(c_double), intent(in), value :: ax, ay, az
+    real(c_double), intent(in), value :: eps
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II   ! new
+    real(c_double), dimension(3), intent(out) :: inv_mass
+    integer(c_int), intent(in), value :: n
+
+    complex(c_double_complex), dimension(n, n) :: ham
+    real(c_double), dimension(n) :: eigenvalues
+
+    real(c_double) :: dkx, dky, dkz
+    real(c_double) :: e0, e_xm, e_xp, e_ym, e_yp, e_zm, e_zp
+    real(c_double) :: dex_m, dex_p, dey_m, dey_p, dez_m, dez_p
+    real(c_double) :: d2ex, d2ey, d2ez
+    real(c_double) :: d2ex_SI, d2ey_SI, d2ez_SI
+    real(c_double) :: inv_mass_SI_x, inv_mass_SI_y, inv_mass_SI_z
+    real(c_double) :: conv_factor
+    real(c_double), parameter :: hbar = 1.0545718e-34_c_double
+    real(c_double), parameter :: m0   = 9.10938356e-31_c_double
+    real(c_double), parameter :: eV_to_J = 1.60217662e-19_c_double
+
+    ! ------------------------------------------------------------------
+    ! Explicit interfaces for the external subroutines (now with II parameters)
+    ! ------------------------------------------------------------------
+    interface
+        subroutine hamiltonian_cubic2d_n2_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                          Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                          deltaSO0, deltaSO1, &
+                                          Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &
+                                          ham, n) &
+                bind(C, name="hamiltonian_cubic2d_n2_2nd")
+            import :: c_double, c_int, c_double_complex
+            real(c_double), intent(in), value :: kx, ky, kz
+            real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+            real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+            real(c_double), intent(in), value :: deltaSO0, deltaSO1
+            real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(out) :: ham
+        end subroutine hamiltonian_cubic2d_n2_2nd
+
+        subroutine eigenvalues_only(ham, eigenvalues, n) &
+                bind(C, name="eigenvalues_only")
+            import :: c_double, c_int, c_double_complex
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+            real(c_double), dimension(n), intent(out) :: eigenvalues
+        end subroutine eigenvalues_only
+    end interface
+    ! ------------------------------------------------------------------
+
+    dkx = eps * 2.0_c_double * acos(-1.0_c_double) / ax
+    dky = eps * 2.0_c_double * acos(-1.0_c_double) / ay
+    dkz = eps * 2.0_c_double * acos(-1.0_c_double) / az
+    band_idx = band_idx + 1 ! Convert from 0-based to 1-based indexing for Fortran
+    ! --- Central point ---
+    call hamiltonian_cubic2d_n2_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e0 = eigenvalues(band_idx)
+
+    ! --- Shifted points along x ---
+    call hamiltonian_cubic2d_n2_2nd(kx - dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n2_2nd(kx + dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xp = eigenvalues(band_idx)
+
+    ! --- Shifted points along y ---
+    call hamiltonian_cubic2d_n2_2nd(kx, ky - dky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_ym = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n2_2nd(kx, ky + dky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_yp = eigenvalues(band_idx)
+
+    ! --- Shifted points along z ---
+    call hamiltonian_cubic2d_n2_2nd(kx, ky, kz - dkz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n2_2nd(kx, ky, kz + dkz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zp = eigenvalues(band_idx)
+
+    ! --- First derivatives (eV·Å) ---
+    dex_m = (e_xm - e0) / (-dkx)
+    dex_p = (e0 - e_xp) / (-dkx)
+    dey_m = (e_ym - e0) / (-dky)
+    dey_p = (e0 - e_yp) / (-dky)
+    dez_m = (e_zm - e0) / (-dkz)
+    dez_p = (e0 - e_zp) / (-dkz)
+
+    ! --- Second derivatives (eV·Å²) ---
+    d2ex = (dex_m - dex_p) / (-dkx)
+    d2ey = (dey_m - dey_p) / (-dky)
+    d2ez = (dez_m - dez_p) / (-dkz)
+
+    ! --- Convert curvature to SI (J·m²) using pre‑computed factor ---
+    conv_factor = 0.13123448563495618_c_double
+    d2ex_SI = d2ex * conv_factor
+    d2ey_SI = d2ey * conv_factor
+    d2ez_SI = d2ez * conv_factor
+
+    ! --- Inverse effective mass in SI (1/kg) ---
+    inv_mass_SI_x = d2ex_SI
+    inv_mass_SI_y = d2ey_SI
+    inv_mass_SI_z = d2ez_SI
+
+    ! --- Convert to units of 1/m₀ ---
+    inv_mass(1) = inv_mass_SI_x
+    inv_mass(2) = inv_mass_SI_y
+    inv_mass(3) = inv_mass_SI_z
+
+end subroutine effective_mass_2dn2_2nd
+
+subroutine effective_mass_2dn3(kx, ky, kz, band_idx, &
+                             ax, ay, az, eps, &
+                             Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, &
+                             inv_mass, n) bind(C, name="effective_mass_2dn3")
+    use, intrinsic :: iso_c_binding
+	
+	implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    integer(c_int), intent(in), value :: band_idx
+    real(c_double), intent(in), value :: ax, ay, az
+    real(c_double), intent(in), value :: eps
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), dimension(3), intent(out) :: inv_mass
+    integer(c_int), intent(in), value :: n
+	
+	complex(c_double_complex), dimension(n, n):: ham
+	real(c_double), dimension(n):: eigenvalues
+	
+    real(c_double) :: dkx, dky, dkz
+    real(c_double) :: e0, e_xm, e_xp, e_ym, e_yp, e_zm, e_zp
+    real(c_double) :: dex_m, dex_p, dey_m, dey_p, dez_m, dez_p
+    real(c_double) :: d2ex, d2ey, d2ez
+    real(c_double) :: d2ex_SI, d2ey_SI, d2ez_SI
+    real(c_double) :: inv_mass_SI_x, inv_mass_SI_y, inv_mass_SI_z
+    real(c_double) :: conv_factor
+    real(c_double), parameter :: hbar = 1.0545718e-34_c_double
+    real(c_double), parameter :: m0   = 9.10938356e-31_c_double
+    real(c_double), parameter :: eV_to_J = 1.60217662e-19_c_double
+	
+	    ! ------------------------------------------------------------------
+    ! Explicit interfaces for the external subroutines (no underscores)
+    ! ------------------------------------------------------------------
+    interface
+        subroutine hamiltonian_cubic2d_n3(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                       Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                       deltaSO0, deltaSO1, ham, n) &
+                bind(C, name="hamiltonian_cubic2d_n3")
+            import :: c_double, c_int, c_double_complex
+            real(c_double), intent(in), value :: kx, ky, kz
+            real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+            real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+            real(c_double), intent(in), value :: deltaSO0, deltaSO1
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(out) :: ham
+        end subroutine hamiltonian_cubic2d_n3
+
+        subroutine eigenvalues_only(ham, eigenvalues, n) &
+                bind(C, name="eigenvalues_only")
+            import :: c_double, c_int, c_double_complex
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+            real(c_double), dimension(n), intent(out) :: eigenvalues
+        end subroutine eigenvalues_only
+    end interface
+    ! ------------------------------------------------------------------
+
+    dkx = eps * 2.0_c_double * acos(-1.0_c_double) / ax
+    dky = eps * 2.0_c_double * acos(-1.0_c_double) / ay
+    dkz = eps * 2.0_c_double * acos(-1.0_c_double) / az
+    band_idx = band_idx + 1 ! Convert from 0-based to 1-based indexing for Fortran
+    ! --- Central point ---
+    call hamiltonian_cubic2d_n3(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e0 = eigenvalues(band_idx)
+
+    ! --- Shifted points ---
+    call hamiltonian_cubic2d_n3(kx - dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n3(kx + dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xp = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n3(kx, ky - dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_ym = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n3(kx, ky + dky, kz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_yp = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n3(kx, ky, kz - dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n3(kx, ky, kz + dkz, Es0, Ep0, Es1, Ep1, &
+                             Vss, Vsp, Vps, Vppsig, Vpppi, &
+                             deltaSO0, deltaSO1, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zp = eigenvalues(band_idx)
+
+    ! --- First derivatives (eV·Å) ---
+    dex_m = (e_xm - e0) / (-dkx)
+    dex_p = (e0 - e_xp) / (-dkx)
+    dey_m = (e_ym - e0) / (-dky)
+    dey_p = (e0 - e_yp) / (-dky)
+    dez_m = (e_zm - e0) / (-dkz)
+    dez_p = (e0 - e_zp) / (-dkz)
+
+    ! --- Second derivatives (eV·Å²) ---
+    d2ex = (dex_m - dex_p) / (-dkx)
+    d2ey = (dey_m - dey_p) / (-dky)
+    d2ez = (dez_m - dez_p) / (-dkz)
+	
+	
+!	print *, e_xm - e0, dkx,eps,ax,2.0_c_double * acos(-1.0_c_double)
+!	print *, " --------- "
+!	print *,eigenvalues(:)
+	
+    ! --- Convert curvature to SI (J·m²) ---
+!    conv_factor = eV_to_J * (1.0e-10_c_double)**2
+    conv_factor=0.13123448563495618
+    d2ex_SI = d2ex * conv_factor
+    d2ey_SI = d2ey * conv_factor
+    d2ez_SI = d2ez * conv_factor
+
+    ! --- Inverse effective mass in SI (1/kg) ---
+    inv_mass_SI_x = d2ex_SI! / (hbar * hbar)
+    inv_mass_SI_y = d2ey_SI! / (hbar * hbar)
+    inv_mass_SI_z = d2ez_SI! / (hbar * hbar)
+
+    ! --- Convert to units of 1/m₀ ---
+    inv_mass(1) = inv_mass_SI_x! * m0
+    inv_mass(2) = inv_mass_SI_y! * m0
+    inv_mass(3) = inv_mass_SI_z! * m0
+
+end subroutine effective_mass_2dn3
+
+subroutine effective_mass_2dn3_2nd(kx, ky, kz, band_idx, &
+                               ax, ay, az, eps, &
+                               Es0, Ep0, Es1, Ep1, &
+                               Vss, Vsp, Vps, Vppsig, Vpppi, &
+                               deltaSO0, deltaSO1, &
+                               Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &   ! new II parameters
+                               inv_mass, n) bind(C, name="effective_mass_2dn3_2nd")
+    use, intrinsic :: iso_c_binding
+
+    implicit none
+    real(c_double), intent(in), value :: kx, ky, kz
+    integer(c_int), intent(in), value :: band_idx
+    real(c_double), intent(in), value :: ax, ay, az
+    real(c_double), intent(in), value :: eps
+    real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+    real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+    real(c_double), intent(in), value :: deltaSO0, deltaSO1
+    real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II   ! new
+    real(c_double), dimension(3), intent(out) :: inv_mass
+    integer(c_int), intent(in), value :: n
+
+    complex(c_double_complex), dimension(n, n) :: ham
+    real(c_double), dimension(n) :: eigenvalues
+
+    real(c_double) :: dkx, dky, dkz
+    real(c_double) :: e0, e_xm, e_xp, e_ym, e_yp, e_zm, e_zp
+    real(c_double) :: dex_m, dex_p, dey_m, dey_p, dez_m, dez_p
+    real(c_double) :: d2ex, d2ey, d2ez
+    real(c_double) :: d2ex_SI, d2ey_SI, d2ez_SI
+    real(c_double) :: inv_mass_SI_x, inv_mass_SI_y, inv_mass_SI_z
+    real(c_double) :: conv_factor
+    real(c_double), parameter :: hbar = 1.0545718e-34_c_double
+    real(c_double), parameter :: m0   = 9.10938356e-31_c_double
+    real(c_double), parameter :: eV_to_J = 1.60217662e-19_c_double
+
+    ! ------------------------------------------------------------------
+    ! Explicit interfaces for the external subroutines (now with II parameters)
+    ! ------------------------------------------------------------------
+    interface
+        subroutine hamiltonian_cubic2d_n3_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                          Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                          deltaSO0, deltaSO1, &
+                                          Vss_II, Vsp_II, Vppsig_II, Vpppi_II, &
+                                          ham, n) &
+                bind(C, name="hamiltonian_cubic2d_n3_2nd")
+            import :: c_double, c_int, c_double_complex
+            real(c_double), intent(in), value :: kx, ky, kz
+            real(c_double), intent(in), value :: Es0, Ep0, Es1, Ep1
+            real(c_double), intent(in), value :: Vss, Vsp, Vps, Vppsig, Vpppi
+            real(c_double), intent(in), value :: deltaSO0, deltaSO1
+            real(c_double), intent(in), value :: Vss_II, Vsp_II, Vppsig_II, Vpppi_II
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(out) :: ham
+        end subroutine hamiltonian_cubic2d_n3_2nd
+
+        subroutine eigenvalues_only(ham, eigenvalues, n) &
+                bind(C, name="eigenvalues_only")
+            import :: c_double, c_int, c_double_complex
+            integer(c_int), intent(in), value :: n
+            complex(c_double_complex), dimension(n, n), intent(inout) :: ham
+            real(c_double), dimension(n), intent(out) :: eigenvalues
+        end subroutine eigenvalues_only
+    end interface
+    ! ------------------------------------------------------------------
+
+    dkx = eps * 2.0_c_double * acos(-1.0_c_double) / ax
+    dky = eps * 2.0_c_double * acos(-1.0_c_double) / ay
+    dkz = eps * 2.0_c_double * acos(-1.0_c_double) / az
+    band_idx = band_idx + 1 ! Convert from 0-based to 1-based indexing for Fortran
+    ! --- Central point ---
+    call hamiltonian_cubic2d_n3_2nd(kx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e0 = eigenvalues(band_idx)
+
+    ! --- Shifted points along x ---
+    call hamiltonian_cubic2d_n3_2nd(kx - dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n3_2nd(kx + dkx, ky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_xp = eigenvalues(band_idx)
+
+    ! --- Shifted points along y ---
+    call hamiltonian_cubic2d_n3_2nd(kx, ky - dky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_ym = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n3_2nd(kx, ky + dky, kz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_yp = eigenvalues(band_idx)
+
+    ! --- Shifted points along z ---
+    call hamiltonian_cubic2d_n3_2nd(kx, ky, kz - dkz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zm = eigenvalues(band_idx)
+
+    call hamiltonian_cubic2d_n3_2nd(kx, ky, kz + dkz, Es0, Ep0, Es1, Ep1, &
+                                Vss, Vsp, Vps, Vppsig, Vpppi, &
+                                deltaSO0, deltaSO1, &
+                                Vss_II, Vsp_II, Vppsig_II, Vpppi_II, ham, n)
+    call eigenvalues_only(ham, eigenvalues, n)
+    e_zp = eigenvalues(band_idx)
+
+    ! --- First derivatives (eV·Å) ---
+    dex_m = (e_xm - e0) / (-dkx)
+    dex_p = (e0 - e_xp) / (-dkx)
+    dey_m = (e_ym - e0) / (-dky)
+    dey_p = (e0 - e_yp) / (-dky)
+    dez_m = (e_zm - e0) / (-dkz)
+    dez_p = (e0 - e_zp) / (-dkz)
+
+    ! --- Second derivatives (eV·Å²) ---
+    d2ex = (dex_m - dex_p) / (-dkx)
+    d2ey = (dey_m - dey_p) / (-dky)
+    d2ez = (dez_m - dez_p) / (-dkz)
+
+    ! --- Convert curvature to SI (J·m²) using pre‑computed factor ---
+    conv_factor = 0.13123448563495618_c_double
+    d2ex_SI = d2ex * conv_factor
+    d2ey_SI = d2ey * conv_factor
+    d2ez_SI = d2ez * conv_factor
+
+    ! --- Inverse effective mass in SI (1/kg) ---
+    inv_mass_SI_x = d2ex_SI
+    inv_mass_SI_y = d2ey_SI
+    inv_mass_SI_z = d2ez_SI
+
+    ! --- Convert to units of 1/m₀ ---
+    inv_mass(1) = inv_mass_SI_x
+    inv_mass(2) = inv_mass_SI_y
+    inv_mass(3) = inv_mass_SI_z
+
+end subroutine effective_mass_2dn3_2nd
+
+!m0/m=X⋅C     X(ev/ang**2)
+!>>> c
+!0.13123448563495618
+!>>> 1/c
+!7.619948332647983

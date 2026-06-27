@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "perovskite-tb-soc"
+version = "0.1.0"
+description = "SP³+SOC tight-binding model for 3D and 2D halide perovskites"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24",
+    "matplotlib>=3.7",
+    "scipy>=1.10",
+    "joblib>=1.3",
+]
+
+[project.optional-dependencies]
+optimize = ["pymoo>=0.6", "optuna>=3.0", "scikit-learn>=1.3", "pandas>=2.0"]
+quantum = ["pennylane>=0.35"]
+ortho = ["ase>=3.22", "plotly>=5.18"]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

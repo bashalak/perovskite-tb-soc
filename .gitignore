@@ -43,7 +43,6 @@ src/python/fit_ortho.py
 src/python/fit_ortho_priority.py
 src/python/fit_ortho_sanity.py
 src/python/fit_ortho_sanity_harrison.py
-src/python/bse_2d.py
 src/python/plot_bands_interactive.py
 
 # Internal portfolio/build notes

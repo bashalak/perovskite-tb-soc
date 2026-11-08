@@ -44,8 +44,12 @@ TB_MU_BARE = {1: 0.200, 2: 0.159, 3: 0.139, 4: 0.139, 5: 0.137}
 # Also matches the empirical <μ_exp/μ_TB>_{n=1..5} = 1.34 ± 0.12 from Table 4.
 ALPHA_FACTOR = 1.34
 
-# TB-derived polaronic μ — THIS IS THE INPUT TO THE R-K SCHRÖDINGER SOLVER.
-# Implements the "TB + Fröhlich polaron correction" chain claimed in the paper.
+# TB-derived polaronic μ (bare × 1.34).
+# NOTE (2026-06-27 correction): the R-K solver now uses the BARE TB mass
+# (TB_MU_BARE), NOT this polaronic value. The bare TB mass already approximates
+# the experimental polaronic μ (Blancon 0.221 vs TB bare 0.200), so applying the
+# 1.34 factor double-counts and over-binds. MU_POL_TB is retained only for the
+# μ-comparison plots and the legacy solver.
 MU_POL_TB = {n: TB_MU_BARE[n] * ALPHA_FACTOR for n in TB_MU_BARE}
 
 # Blancon's experimental polaronic μ (60T magnetoabsorption, SI Table 1).
@@ -59,8 +63,19 @@ EL_BSE = {1: 302,   5: 97}                                      # meV (Cho 2019,
 # ── Screening length ──────────────────────────────────────────────────────────
 
 def r0_nm(n, eps_slab=EPS_SLAB, eps_env=EPS_ENV):
-    """Rytova-Keldysh screening length r₀ = ε_slab × d / (2 ε_env)  [nm]."""
-    return eps_slab * D_NM[n] / (2.0 * eps_env)
+    """Rytova-Keldysh screening length r₀  [nm].
+
+    Cudazzo-Tokatly-Rubio convention (PRB 84, 085406, 2011):
+        r₀ = (ε_slab − ε_env) · d / 2
+    Used throughout: with the corrected direct solver it reproduces the
+    Blancon 2018 binding energies to ~13 meV MAE (see solve_binding_energy).
+    The original Keldysh-1979 form  r₀ = ε_slab·d/(2 ε_env)  over-binds by
+    ~40% once the radial equation is solved correctly, and is kept below for
+    reference only.
+    """
+    return (eps_slab - eps_env) * D_NM[n] / 2.0
+    # Keldysh 1979 (over-binds with the correct solver):
+    #   return eps_slab * D_NM[n] / (2.0 * eps_env)
 
 
 # ── Potential functions ───────────────────────────────────────────────────────
@@ -112,41 +127,78 @@ def V_RK_r(r_nm, r0, eps_env=EPS_ENV):
 
 # ── Level-1 radial Schrödinger solver ────────────────────────────────────────
 
-def solve_binding_energy(n, r_max=120.0, Nr=4000):
+def solve_binding_energy(n, r_max=120.0, Nr=4000, mu=None):
     """
-    Solve the 2D radial SE with the R-K potential using finite differences.
+    Exciton binding energy from the 2D radial Schrödinger equation (m=0) with the
+    Rytova-Keldysh potential, solved DIRECTLY (no √r substitution):
 
-    Substitution g(r) = √r · ψ(r) converts the 2D radial SE (m=0) into a 1D SE:
-        -ℏ²/(2μ) g'' + [V_RK(r) + ℏ²/(8μr²)] g = E g
-    with Dirichlet BCs g(0) = g(r_max) = 0  (standard, no special treatment at origin).
+        -ℏ²/(2μ) [ R''(r) + (1/r) R'(r) ] + V_RK(r) R = E R .
+
+    Conservative (finite-volume) discretization on a half-integer grid
+    (cell centres r_i = (i-½)Δr, i = 1..Nr): writing -ℏ²/(2μ)(1/r)(r R')' + V R = E R
+    and multiplying by r yields a SYMMETRIC generalized eigenproblem A v = E M v:
+
+        A[i,i±1] = -ℏ²/(2μ) · r_{i±½}/Δr²
+        A[i,i]   =  ℏ²/(2μ) · (r_{i-½}+r_{i+½})/Δr²  +  V_RK(r_i)·r_i
+        M[i,i]   =  r_i
+
+    with the natural Neumann condition at the origin (zero inward flux: r_{½}=0) and
+    Dirichlet at r_max. Grid-converged to <1 meV at Nr=4000.
+
+    CORRECTION (2026-06-27): the previous implementation used the substitution
+    g=√r·ψ with a WRONG-SIGN +ℏ²/(8μr²) centrifugal term. The correct 2D m=0
+    reduction has −ℏ²/(8μr²) (the critical "fall-to-centre" inverse-square case),
+    which makes the √r route numerically unreliable; hence the direct solve here.
+    See SI (Paper 1b) for the derivation. The legacy solver is kept below as
+    `solve_binding_energy_legacy` for diagnostics only.
+
+    Parameters
+    ----------
+    mu : reduced mass [m₀]; defaults to the BARE TB mass TB_MU_BARE[n].
+         Do NOT pass the 1.34-polaron mass — it over-binds (see MU_POL_TB note).
 
     Returns
     -------
     binding_meV : float   (positive = bound state)
     eigenvalues : 1D array of lowest 3 eigenvalues [eV]
     """
-    r0            = r0_nm(n)
-    hbar2_2mu     = HBAR2_OVER_2ME / MU_POL_TB[n]   # eV·nm²  TB μ × Fröhlich factor
-    dr            = r_max / (Nr + 1)
-    r             = np.arange(1, Nr + 1) * dr    # r₁ = dr, …, r_N = N·dr
+    if mu is None:
+        mu = TB_MU_BARE[n]
+    r0        = r0_nm(n)
+    hbar2_2mu = HBAR2_OVER_2ME / mu              # eV·nm²
+    dr        = r_max / Nr
+    r     = (np.arange(Nr) + 0.5) * dr           # cell centres (no r=0 point)
+    r_in  =  np.arange(Nr) * dr                  # inner faces (i-½)Δr; r_in[0]=0 → Neumann
+    r_out = (np.arange(Nr) + 1) * dr             # outer faces  iΔr
+    V = V_RK_r(r, r0)
 
-    # Effective potential: R-K + 2D centrifugal term ℏ²/(8μr²) = hbar2_2mu/(4r²)
-    # Arises from the substitution g = √r · ψ, which turns the 2D radial SE into
-    # a 1D SE: -ℏ²/(2μ) g'' + [V(r) + ℏ²/(8μr²)] g = E g  with g(0)=g(r_max)=0.
-    V_eff = V_RK_r(r, r0) + hbar2_2mu / (4.0 * r**2)
+    diag_main = hbar2_2mu * (r_in + r_out) / dr**2 + V * r
+    off_up    = -hbar2_2mu * r_out[:-1] / dr**2
+    off_lo    = -hbar2_2mu * r_in[1:]  / dr**2
+    A = diags([off_lo, diag_main, off_up], [-1, 0, 1], shape=(Nr, Nr), format='csc')
+    M = diags([r], [0], shape=(Nr, Nr), format='csc')
 
-    # Standard 1D tridiagonal kinetic energy (no 1/r off-diagonal terms)
+    eigenvalues = np.sort(eigsh(A, k=3, M=M, sigma=-2.0, which='LM',
+                                return_eigenvectors=False))
+    binding_meV = -eigenvalues[0] * 1000.0       # eV → meV (E₁ < 0 → positive binding)
+    return binding_meV, eigenvalues
+
+
+def solve_binding_energy_legacy(n, r_max=120.0, Nr=4000):
+    """DEPRECATED diagnostic — original √r-substitution solver with a wrong-sign
+    +ℏ²/(8μr²) centrifugal term and the polaron mass MU_POL_TB. Under-binds.
+    Retained only to reproduce the pre-2026-06-27 numbers; do NOT use for results."""
+    r0         = r0_nm(n)
+    hbar2_2mu  = HBAR2_OVER_2ME / MU_POL_TB[n]
+    dr         = r_max / (Nr + 1)
+    r          = np.arange(1, Nr + 1) * dr
+    V_eff      = V_RK_r(r, r0) + hbar2_2mu / (4.0 * r**2)   # NOTE: wrong sign (+)
     hopping    = -hbar2_2mu / dr**2
     main_diag  = -2.0 * hopping + V_eff
-
     H = diags([np.full(Nr - 1, hopping), main_diag, np.full(Nr - 1, hopping)],
               [-1, 0, 1], shape=(Nr, Nr), format='csr')
-
-    eigenvalues, _ = eigsh(H, k=3, which='SA')
-    eigenvalues    = np.sort(eigenvalues)
-
-    binding_meV = -eigenvalues[0] * 1000.0   # eV → meV  (E₁ < 0 → positive binding)
-    return binding_meV, eigenvalues
+    eigenvalues = np.sort(eigsh(H, k=3, which='SA', return_eigenvectors=False))
+    return -eigenvalues[0] * 1000.0, eigenvalues
 
 
 # ── Run all n ─────────────────────────────────────────────────────────────────

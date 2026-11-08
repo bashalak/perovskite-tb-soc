@@ -140,10 +140,12 @@ def test_vrk_r_large_r_limit():
     assert np.all(rel_err < 0.02), f"V_RK and Coulomb differ by {rel_err*100} % at large r"
 
 
-def test_binding_energy_n1():
-    """Level-1 binding energy for n=1 should be ~258 meV (± 30 meV tolerance)."""
-    E_b, _ = solve_binding_energy(1)
-    assert 220.0 < E_b < 300.0, f"E_B(n=1) = {E_b:.1f} meV, expected 220–300 meV"
+# NOTE: a test asserting 220 < E_b(n=1) < 300 meV used to live here.  The
+# bound came from a run, not from a derivation, and when a sign error in the
+# radial reduction was corrected the true answer moved to 430 meV -- so the
+# test failed the fix rather than the bug.  It has been replaced by
+# tests/test_rytova_keldysh.py, which checks the solver against the exact
+# 2D hydrogenic limit instead.
 
 
 def test_binding_energy_decreases_with_n():
